@@ -41,13 +41,12 @@ go install github.com/dbohdan/age-edit@master
 
 ```
 Usage: age-edit [options] keyfile encrypted-file
-  -editor string
-    	the editor to use
-  -ro
-    	read-only mode -- all changes will be discarded
-  -v	report the program version and exit
-  -warn int
-    	warn if the editor exits after less than X seconds
+
+Options:
+  -e, --editor string   command to use for editing the encrypted file
+  -r, --read-only       discard all changes
+  -v, --version         report the program version and exit
+  -w, --warn int        warn if the editor exits after less than a number seconds (zero to disable)
 ```
 
 ## Security and other considerations

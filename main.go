@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +12,7 @@ import (
 
 	"filippo.io/age"
 	"filippo.io/age/armor"
+	flag "github.com/cornfeedhobo/pflag"
 )
 
 const (
@@ -209,17 +209,38 @@ func edit(keyPath, encrypted, editor string, readOnly bool) (tempDir string, err
 }
 
 func cli() int {
-	editorFlag := flag.String("editor", "", "the editor to use")
-	readOnly := flag.Bool("ro", false, "read-only mode -- all changes will be discarded")
-	showVersion := flag.Bool("v", false, "report the program version and exit")
-	warn := flag.Int("warn", 0, "warn if the editor exits after less than X seconds")
+	editorFlag := flag.StringP(
+		"editor",
+		"e",
+		"",
+		"command to use for editing the encrypted file",
+	)
+	readOnly := flag.BoolP(
+		"read-only",
+		"r",
+		false,
+		"discard all changes",
+	)
+	showVersion := flag.BoolP(
+		"version",
+		"v",
+		false,
+		"report the program version and exit",
+	)
+	warn := flag.IntP(
+		"warn",
+		"w",
+		0,
+		"warn if the editor exits after less than a number seconds (zero to disable)",
+	)
 
 	flag.Usage = func() {
 		fmt.Fprintf(
 			os.Stderr,
-			"Usage: %s [options] keyfile encrypted-file\n",
+			"Usage: %s [options] keyfile encrypted-file\n\nOptions:\n",
 			filepath.Base(os.Args[0]),
 		)
+
 		flag.PrintDefaults()
 	}
 
@@ -227,6 +248,7 @@ func cli() int {
 
 	if *showVersion {
 		fmt.Println(version)
+
 		return 0
 	}
 
@@ -245,11 +267,6 @@ func cli() int {
 	}
 	if editor == "" {
 		editor = "vi"
-	}
-
-	if *warn < 0 {
-		fmt.Fprintln(os.Stderr, "Error: the argument to -warn can't be negative")
-		return 2
 	}
 
 	keyPath := flag.Arg(0)
