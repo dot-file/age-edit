@@ -1,6 +1,7 @@
 # gpgedit
 
-gpgedit is an editor wrapper for GPG2-encrypted files.
+gpgedit is an editor wrapper for GPG2-encrypted files for Linux.
+
 How it works:
 
 1. First, gpgedit asks for a passphrase.
@@ -27,6 +28,7 @@ gpgedit is beta-quality software.
 ### Runtime
 
 - GPG2
+- `/dev/shm/` enabled in the Linux kernel
 
 ## Installation
 
