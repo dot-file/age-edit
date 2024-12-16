@@ -1,7 +1,10 @@
-module github.com/dbohdan/gpgedit
+module github.com/dbohdan/age-edit
 
 go 1.21
 
-require golang.org/x/term v0.26.0
+require filippo.io/age v1.2.0
 
-require golang.org/x/sys v0.27.0 // indirect
+require (
+	golang.org/x/crypto v0.24.0 // indirect
+	golang.org/x/sys v0.27.0 // indirect
+)

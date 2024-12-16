@@ -1,7 +1,8 @@
+*.age
 *.asc
 *.gpg
 *.swp
 *.txt
 
-/gpgedit
+/age-edit
 /help

@@ -1,9 +1,9 @@
 .PHONY: all
-all: gpgedit
+all: age-edit
 
 .PHONY: clean
 clean:
-	-rm gpgedit
+	-rm age-edit
 
-gpgedit: main.go
+age-edit: main.go
 	CGO_ENABLED=0 go build -trimpath
