@@ -51,25 +51,25 @@ func wrapDecrypt(r io.Reader, identities ...age.Identity) (io.Reader, error) {
 		return nil, fmt.Errorf("failed to seek: %v", err)
 	}
 
-	isArmored := string(header) == armor.Header
+	armored := string(header) == armor.Header
 
-	if isArmored {
-		armoredReader := armor.NewReader(r)
-		decryptedReader, err := age.Decrypt(armoredReader, identities...)
+	if armored {
+		armorReader := armor.NewReader(r)
+		decryptReader, err := age.Decrypt(armorReader, identities...)
 		if err != nil {
 			return nil, fmt.Errorf("armored decryption failed: %v", err)
 		}
 
-		return decryptedReader, nil
+		return decryptReader, nil
 	}
 
 	// Try binary decryption.
-	decryptedReader, err := age.Decrypt(r, identities...)
+	decryptReader, err := age.Decrypt(r, identities...)
 	if err != nil {
 		return nil, fmt.Errorf("binary decryption failed: %v", err)
 	}
 
-	return decryptedReader, nil
+	return decryptReader, nil
 }
 
 func decrypt(in, out string, identities ...age.Identity) error {
@@ -94,7 +94,7 @@ func decrypt(in, out string, identities ...age.Identity) error {
 	return err
 }
 
-func encrypt(in, out string, recipients ...age.Recipient) error {
+func encrypt(in, out string, armored bool, recipients ...age.Recipient) error {
 	inFile, err := os.Open(in)
 	if err != nil {
 		return err
@@ -107,10 +107,17 @@ func encrypt(in, out string, recipients ...age.Recipient) error {
 	}
 	defer outFile.Close()
 
-	armorWriter := armor.NewWriter(outFile)
-	defer armorWriter.Close()
+	var w io.Writer
+	if armored {
+		armorWriter := armor.NewWriter(outFile)
+		defer armorWriter.Close()
 
-	encryptWriter, err := age.Encrypt(armorWriter, recipients...)
+		w = armorWriter
+	} else {
+		w = outFile
+	}
+
+	encryptWriter, err := age.Encrypt(w, recipients...)
 	if err != nil {
 		return err
 	}
@@ -120,7 +127,13 @@ func encrypt(in, out string, recipients ...age.Recipient) error {
 	return err
 }
 
-func edit(keyPath, encrypted, editor string, readOnly bool) (tempDir string, err error) {
+func edit(
+	keyPath,
+	encrypted string,
+	armor bool,
+	editor string,
+	readOnly bool,
+) (tempDir string, err error) {
 	var exists bool
 	exists, err = checkAccess(encrypted, readOnly)
 	if err != nil {
@@ -199,7 +212,7 @@ func edit(keyPath, encrypted, editor string, readOnly bool) (tempDir string, err
 	}
 
 	if !readOnly {
-		if err = encrypt(tempFile.Name(), encrypted, recipients...); err != nil {
+		if err = encrypt(tempFile.Name(), encrypted, armor, recipients...); err != nil {
 			err = &encryptError{err: err, tempFile: tempFile.Name()}
 			return
 		}
@@ -209,6 +222,12 @@ func edit(keyPath, encrypted, editor string, readOnly bool) (tempDir string, err
 }
 
 func cli() int {
+	binary := flag.BoolP(
+		"binary",
+		"b",
+		false,
+		"write binary rather than armored age files",
+	)
 	editorFlag := flag.StringP(
 		"editor",
 		"e",
@@ -274,7 +293,7 @@ func cli() int {
 
 	start := int(time.Now().Unix())
 
-	tempDir, err := edit(keyPath, filename, editor, *readOnly)
+	tempDir, err := edit(keyPath, filename, !*binary, editor, *readOnly)
 	if tempDir != "" {
 		defer os.RemoveAll(tempDir)
 	}

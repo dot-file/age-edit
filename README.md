@@ -10,7 +10,7 @@ This is how age-edit works:
   (The editor is [`VISUAL` or `EDITOR`](https://unix.stackexchange.com/questions/4859/visual-vs-editor-what-s-the-difference) by default, but it can be, e.g., LibreOffice.)
 3. It waits for the editor to exit.
 4. It encrypts the temporary file with public keys derived from the private keys.
-   The encrypted file is [armored](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail).
+   The encrypted file is armored (ASCII in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format) by default.
 5. Finally, age-edit deletes the temporary file.
 
 In other words, age-edit implements
@@ -43,6 +43,7 @@ go install github.com/dbohdan/age-edit@latest
 Usage: age-edit [options] keyfile encrypted-file
 
 Options:
+  -b, --binary          write binary rather than armored age files
   -e, --editor string   command to use for editing the encrypted file
   -r, --read-only       discard all changes
   -v, --version         report the program version and exit
