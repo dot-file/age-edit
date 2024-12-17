@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -19,7 +21,7 @@ const (
 	filePerm      = 0o600
 	tempDirPerm   = 0o700
 	tempDirPrefix = "/dev/shm"
-	version       = "0.4.0"
+	version       = "0.4.1"
 )
 
 type encryptError struct {
@@ -31,135 +33,132 @@ func (e *encryptError) Error() string {
 	return fmt.Sprintf("encryption failed: %v", e.err)
 }
 
-// Returns a reader that can handle both armored and binary age files.
+// Handle both armored and binary age files transparently.
 func wrapDecrypt(r io.Reader, identities ...age.Identity) (io.Reader, error) {
-	// Check if the input starts with an armor header.
-	seeker, ok := r.(io.Seeker)
-	if !ok {
-		return nil, fmt.Errorf("input must be seekable")
-	}
+	buffer := make([]byte, len(armor.Header))
 
-	// Read enough bytes to check for the armor header.
-	header := make([]byte, len(armor.Header))
-	_, err := io.ReadFull(r, header)
-	if err != nil {
+	// Check if the input starts with an armor header.
+	n, err := io.ReadFull(r, buffer)
+	if err != nil && !errors.Is(err, io.EOF) && n < len(armor.Header) {
 		return nil, fmt.Errorf("failed to read header: %v", err)
 	}
 
-	_, err = seeker.Seek(0, io.SeekStart)
-	if err != nil {
-		return nil, fmt.Errorf("failed to seek: %v", err)
-	}
-
-	armored := string(header) == armor.Header
+	armored := string(buffer[:n]) == armor.Header
+	r = io.MultiReader(bytes.NewReader(buffer[:n]), r)
 
 	if armored {
-		armorReader := armor.NewReader(r)
-		decryptReader, err := age.Decrypt(armorReader, identities...)
+		return age.Decrypt(armor.NewReader(r), identities...)
+	}
+
+	return age.Decrypt(r, identities...)
+}
+
+func withFiles(inputPath, outputPath string, action func(in io.Reader, out io.Writer) error) error {
+	in, err := os.Open(inputPath)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	return action(in, out)
+}
+
+func decryptToFile(inputPath, outputPath string, identities ...age.Identity) error {
+	return withFiles(inputPath, outputPath, func(in io.Reader, out io.Writer) error {
+		d, err := wrapDecrypt(in, identities...)
 		if err != nil {
-			return nil, fmt.Errorf("armored decryption failed: %v", err)
+			return err
 		}
 
-		return decryptReader, nil
-	}
-
-	// Try binary decryption.
-	decryptReader, err := age.Decrypt(r, identities...)
-	if err != nil {
-		return nil, fmt.Errorf("binary decryption failed: %v", err)
-	}
-
-	return decryptReader, nil
+		_, err = io.Copy(out, d)
+		return err
+	})
 }
 
-func decrypt(in, out string, identities ...age.Identity) error {
-	inFile, err := os.Open(in)
-	if err != nil {
-		return err
-	}
-	defer inFile.Close()
+func encryptToFile(inputPath, outputPath string, armored bool, recipients ...age.Recipient) error {
+	return withFiles(inputPath, outputPath, func(in io.Reader, out io.Writer) error {
+		var w io.Writer = out
 
-	outFile, err := os.Create(out)
-	if err != nil {
-		return err
-	}
-	defer outFile.Close()
+		if armored {
+			armorWriter := armor.NewWriter(out)
+			defer armorWriter.Close()
 
-	d, err := wrapDecrypt(inFile, identities...)
-	if err != nil {
-		return err
-	}
+			w = armorWriter
+		}
 
-	_, err = io.Copy(outFile, d)
-	return err
+		encryptWriter, err := age.Encrypt(w, recipients...)
+		if err != nil {
+			return err
+		}
+		defer encryptWriter.Close()
+
+		_, err = io.Copy(encryptWriter, in)
+		return err
+	})
 }
 
-func encrypt(in, out string, armored bool, recipients ...age.Recipient) error {
-	inFile, err := os.Open(in)
-	if err != nil {
-		return err
-	}
-	defer inFile.Close()
-
-	outFile, err := os.Create(out)
-	if err != nil {
-		return err
-	}
-	defer outFile.Close()
-
-	var w io.Writer
-	if armored {
-		armorWriter := armor.NewWriter(outFile)
-		defer armorWriter.Close()
-
-		w = armorWriter
-	} else {
-		w = outFile
-	}
-
-	encryptWriter, err := age.Encrypt(w, recipients...)
-	if err != nil {
-		return err
-	}
-	defer encryptWriter.Close()
-
-	_, err = io.Copy(encryptWriter, inFile)
-	return err
+func getRoot(path string) string {
+	return strings.TrimSuffix(path, ".age")
 }
 
-func edit(
-	keyPath,
-	encrypted string,
-	armor bool,
-	editor string,
-	readOnly bool,
-) (tempDir string, err error) {
-	var exists bool
-	exists, err = checkAccess(encrypted, readOnly)
-	if err != nil {
-		return
+func checkAccess(path string, readOnly bool) (bool, error) {
+	_, err := os.Stat(path)
+
+	if err != nil && os.IsNotExist(err) {
+		if readOnly {
+			return false, fmt.Errorf("%q doesn't exist; won't attempt to create it in read-only mode", path)
+		}
+
+		return false, nil
 	}
 
-	// Load the private keys.
-	keyData, err := os.ReadFile(keyPath)
+	f, err := os.Open(path)
 	if err != nil {
-		return "", fmt.Errorf("failed to read keyfile: %v", err)
+		return true, fmt.Errorf("can't read from file %q", path)
+	}
+	f.Close()
+
+	// If not in read-only mode, try to open for writing.
+	// We don't want writing to fail later, after the user edits the file.
+	if !readOnly {
+		f, err := os.OpenFile(path, os.O_RDWR, 0600)
+
+		if err != nil {
+			return true, fmt.Errorf("can't write to file %q", path)
+		}
+
+		f.Close()
 	}
 
+	return true, nil
+}
+
+func loadIdentities(path string) ([]age.Identity, []age.Recipient, error) {
 	var identities []age.Identity
 	var recipients []age.Recipient
 
-	keyCount := 0
-	for _, line := range strings.Split(string(keyData), "\n") {
+	identityData, err := os.ReadFile(path)
+	if err != nil {
+		return identities, recipients, fmt.Errorf("failed to read keyfile: %v", err)
+	}
+
+	identityCount := 0
+	for _, line := range strings.Split(string(identityData), "\n") {
 		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
 			continue
 		}
 
-		keyCount++
+		identityCount++
 
 		identity, err := age.ParseX25519Identity(line)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse private key number %d: %v", keyCount, err)
+			return identities, recipients, fmt.Errorf("failed to parse private key number %d: %v", identityCount, err)
 		}
 
 		identities = append(identities, identity)
@@ -167,7 +166,22 @@ func edit(
 	}
 
 	if len(identities) == 0 {
-		return "", fmt.Errorf("no identities found in keyfile")
+		return identities, recipients, fmt.Errorf("no identities found in keyfile")
+	}
+
+	return identities, recipients, nil
+}
+
+func edit(idsPath, encPath string, armor bool, editor string, readOnly bool) (tempDir string, err error) {
+	var exists bool
+	exists, err = checkAccess(encPath, readOnly)
+	if err != nil {
+		return
+	}
+
+	identities, recipients, err := loadIdentities(idsPath)
+	if err != nil {
+		return
 	}
 
 	currentUser, err := user.Current()
@@ -181,7 +195,7 @@ func edit(
 		return
 	}
 
-	rootname := getRoot(encrypted)
+	rootname := getRoot(encPath)
 	var tempFile *os.File
 	tempFile, err = os.CreateTemp(tempDir, "*"+filepath.Base(rootname))
 	if err != nil {
@@ -189,16 +203,8 @@ func edit(
 	}
 	tempFile.Close()
 
-	// This check from the Tcl version is probably unnecessary.
-	if err = checkPermissions(tempDir, tempDirPerm); err != nil {
-		return
-	}
-	if err = checkPermissions(tempFile.Name(), filePerm); err != nil {
-		return
-	}
-
 	if exists {
-		if err = decrypt(encrypted, tempFile.Name(), identities...); err != nil {
+		if err = decryptToFile(encPath, tempFile.Name(), identities...); err != nil {
 			return
 		}
 	}
@@ -212,7 +218,7 @@ func edit(
 	}
 
 	if !readOnly {
-		if err = encrypt(tempFile.Name(), encrypted, armor, recipients...); err != nil {
+		if err = encryptToFile(tempFile.Name(), encPath, armor, recipients...); err != nil {
 			err = &encryptError{err: err, tempFile: tempFile.Name()}
 			return
 		}
@@ -326,60 +332,4 @@ func cli() int {
 
 func main() {
 	os.Exit(cli())
-}
-
-func checkPermissions(filename string, perm os.FileMode) error {
-	info, err := os.Stat(filename)
-	if err != nil {
-		return err
-	}
-
-	actualPerm := info.Mode().Perm()
-	if actualPerm != perm {
-		return fmt.Errorf("wrong permissions on %q: %o instead of %o", filename, actualPerm, perm)
-	}
-
-	return nil
-}
-
-func getRoot(encrypted string) string {
-	ext := filepath.Ext(encrypted)
-
-	if ext == ".age" {
-		return strings.TrimSuffix(encrypted, ext)
-	}
-
-	return encrypted
-}
-
-func checkAccess(encrypted string, readOnly bool) (bool, error) {
-	_, err := os.Stat(encrypted)
-
-	if err != nil && os.IsNotExist(err) {
-		if readOnly {
-			return false, fmt.Errorf("%q doesn't exist; won't attempt to create it in read-only mode", encrypted)
-		}
-
-		return false, nil
-	}
-
-	f, err := os.Open(encrypted)
-	if err != nil {
-		return true, fmt.Errorf("can't read from file %q", encrypted)
-	}
-	f.Close()
-
-	// If not in read-only mode, try to open for writing.
-	// We don't want writing to fail later, after the user edits the file.
-	if !readOnly {
-		f, err := os.OpenFile(encrypted, os.O_RDWR, 0600)
-
-		if err != nil {
-			return true, fmt.Errorf("can't write to file %q", encrypted)
-		}
-
-		f.Close()
-	}
-
-	return true, nil
 }
