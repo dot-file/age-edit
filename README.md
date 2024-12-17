@@ -1,16 +1,16 @@
 # age-edit
 
-age-edit is an editor wrapper for age-encrypted files.
-It is made primarily for Linux because it uses `/dev/shm/`.
+age-edit is an editor wrapper for files encrypted with [age](https://github.com/FiloSottile/age).
+It is made primarily for Linux and uses `/dev/shm/` by default.
 
 This is how age-edit works:
 
 1. It decrypts the contents of a file encrypted with age to a temporary file using private keys.
 2. It runs an editor on the temporary file.
-  (The editor is [`VISUAL` or `EDITOR`](https://unix.stackexchange.com/questions/4859/visual-vs-editor-what-s-the-difference) by default, but it can be, e.g., LibreOffice.)
+  (The default editor is [`VISUAL` or `EDITOR`](https://unix.stackexchange.com/questions/4859/visual-vs-editor-what-s-the-difference) but it can be, e.g., LibreOffice.)
 3. It waits for the editor to exit.
 4. It encrypts the temporary file with public keys derived from the private keys.
-   The encrypted file is armored (ASCII in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format) by default.
+   The encrypted file is armored (stored in ASCII in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format) unless the user says it shouldn't be.
 5. Finally, age-edit deletes the temporary file.
 
 In other words, age-edit implements
@@ -28,8 +28,8 @@ age-edit is beta-quality software.
 
 ### Runtime
 
-- A temporary filesystem mounted at `/dev/shm/`.
-  It is present by default on Linux with glibc.
+- Optional: a temporary filesystem mounted on `/dev/shm/`.
+  It is usually present on Linux with glibc.
 
 ## Installation
 
@@ -43,18 +43,20 @@ go install github.com/dbohdan/age-edit@latest
 Usage: age-edit [options] keyfile encrypted-file
 
 Options:
-  -b, --binary          write binary rather than armored age files
-  -e, --editor string   command to use for editing the encrypted file
-  -r, --read-only       discard all changes
-  -v, --version         report the program version and exit
-  -w, --warn int        warn if the editor exits after less than a number seconds (zero to disable)
+  -b, --binary            write binary rather than armored age files
+  -e, --editor string     command to use for editing the encrypted file
+  -r, --read-only         discard all changes
+  -t, --temp-dir string   temporary directory prefix (default "/dev/shm/")
+  -v, --version           report the program version and exit
+  -w, --warn int          warn if the editor exits after less than a number seconds (zero to disable)
 ```
 
 ## Security and other considerations
 
 The age identities (private keys) from the keyfile are kept in memory while the encrypted file is being edited.
 This memory can be accessed by the user's other programs or read from the swap if age-edit is swapped out.
-The decrypted contents of the file is stored on a temporary filesystem in RAM at `/dev/shm/${USER}-age-edit`.
+The decrypted contents of the file is stored in the directory `${USER}/age-edit/` at a temporary location.
+This location defaults to `/dev/shm/`.
 Other programs run by the same user can access it there, and it can also be swapped out.
 
 age-edit doesn't work with multi-document editors.

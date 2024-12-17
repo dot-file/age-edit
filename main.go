@@ -18,10 +18,10 @@ import (
 )
 
 const (
-	filePerm      = 0o600
-	tempDirPerm   = 0o700
-	tempDirPrefix = "/dev/shm"
-	version       = "0.4.1"
+	defaultTempDirPrefix = "/dev/shm/"
+	filePerm             = 0o600
+	tempDirPerm          = 0o700
+	version              = "0.5.0"
 )
 
 type encryptError struct {
@@ -145,7 +145,7 @@ func loadIdentities(path string) ([]age.Identity, []age.Recipient, error) {
 
 	identityData, err := os.ReadFile(path)
 	if err != nil {
-		return identities, recipients, fmt.Errorf("failed to read keyfile: %v", err)
+		return identities, recipients, fmt.Errorf("failed to read identities file: %v", err)
 	}
 
 	identityCount := 0
@@ -166,13 +166,13 @@ func loadIdentities(path string) ([]age.Identity, []age.Recipient, error) {
 	}
 
 	if len(identities) == 0 {
-		return identities, recipients, fmt.Errorf("no identities found in keyfile")
+		return identities, recipients, fmt.Errorf("no identities found in file")
 	}
 
 	return identities, recipients, nil
 }
 
-func edit(idsPath, encPath string, armor bool, editor string, readOnly bool) (tempDir string, err error) {
+func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, readOnly bool) (tempDir string, err error) {
 	var exists bool
 	exists, err = checkAccess(encPath, readOnly)
 	if err != nil {
@@ -252,6 +252,12 @@ func cli() int {
 		false,
 		"report the program version and exit",
 	)
+	tempDirPrefix := flag.StringP(
+		"temp-dir",
+		"t",
+		defaultTempDirPrefix,
+		"temporary directory prefix",
+	)
 	warn := flag.IntP(
 		"warn",
 		"w",
@@ -262,7 +268,7 @@ func cli() int {
 	flag.Usage = func() {
 		fmt.Fprintf(
 			os.Stderr,
-			"Usage: %s [options] keyfile encrypted-file\n\nOptions:\n",
+			"Usage: %s [options] identities encrypted-file\n\nOptions:\n",
 			filepath.Base(os.Args[0]),
 		)
 
@@ -299,7 +305,7 @@ func cli() int {
 
 	start := int(time.Now().Unix())
 
-	tempDir, err := edit(keyPath, filename, !*binary, editor, *readOnly)
+	tempDir, err := edit(keyPath, filename, *tempDirPrefix, !*binary, editor, *readOnly)
 	if tempDir != "" {
 		defer os.RemoveAll(tempDir)
 	}
