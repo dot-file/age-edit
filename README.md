@@ -51,6 +51,26 @@ Options:
   -w, --warn int          warn if the editor exits after less than a number seconds (zero to disable)
 ```
 
+## Editing compressed files
+
+With a shell script like this, you can edit compressed files using age-edit.
+Give age-edit the path to the shell script as `--editor`.
+
+```shell
+#! /bin/sh
+set -eu
+
+cd "$(dirname "$(realpath "$1")")"
+decompressed=$(dirname "$1")/dc-$(basename "$1")
+
+# Decompress if not empty.
+if [ -s "$1" ]; then
+    zstd -d < "$1" > "$decompressed"
+fi
+"${VISUAL:-${EDITOR:-vim}}" "$decompressed"
+zstd -7 --long < "$decompressed" > "$1"
+```
+
 ## Security and other considerations
 
 The age identities (private keys) from the keyfile are kept in memory while the encrypted file is being edited.
