@@ -21,7 +21,7 @@ const (
 	defaultTempDirPrefix = "/dev/shm/"
 	filePerm             = 0o600
 	tempDirPerm          = 0o700
-	version              = "0.5.0"
+	version              = "0.6.0"
 )
 
 type encryptError struct {
@@ -228,11 +228,11 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 }
 
 func cli() int {
-	binary := flag.BoolP(
-		"binary",
-		"b",
+	armored := flag.BoolP(
+		"armor",
+		"a",
 		false,
-		"write binary rather than armored age files",
+		"write armored age file",
 	)
 	editorFlag := flag.StringP(
 		"editor",
@@ -305,7 +305,7 @@ func cli() int {
 
 	start := int(time.Now().Unix())
 
-	tempDir, err := edit(keyPath, filename, *tempDirPrefix, !*binary, editor, *readOnly)
+	tempDir, err := edit(keyPath, filename, *tempDirPrefix, *armored, editor, *readOnly)
 	if tempDir != "" {
 		defer os.RemoveAll(tempDir)
 	}
