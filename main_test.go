@@ -108,7 +108,6 @@ func TestGetRoot(t *testing.T) {
 	}
 }
 
-
 func TestLoadIdentities(t *testing.T) {
 	corruptedKey := "AGE-SECRET-KEY-1XXXXXXXXXX1234567890abcdefghijklmnopqrstuvwxyz"
 	validKey := "AGE-SECRET-KEY-150E3TFLT765WC7X9E2Y6KAN2XA7NE4DN0XVCR4ATTFQK6GSXCGVS3KS7MS"
@@ -130,6 +129,8 @@ func TestLoadIdentities(t *testing.T) {
 		{corruptedKey + "\n", 0, true},
 		// Ignore comments and blank lines.
 		{"# Comment\n \n\n" + validKey + "\n", 1, false},
+		// An indented comment.
+		{"    # Comment\n" + validKey, 1, false},
 		// An empty file.
 		{"", 0, true},
 	}

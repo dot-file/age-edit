@@ -21,7 +21,7 @@ const (
 	defaultTempDirPrefix = "/dev/shm/"
 	filePerm             = 0o600
 	tempDirPerm          = 0o700
-	version              = "0.6.0"
+	version              = "0.6.1"
 )
 
 type encryptError struct {
@@ -150,7 +150,8 @@ func loadIdentities(path string) ([]age.Identity, []age.Recipient, error) {
 
 	identityCount := 0
 	for _, line := range strings.Split(string(identityData), "\n") {
-		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
+		line := strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
