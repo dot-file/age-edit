@@ -34,7 +34,7 @@ age-edit is beta-quality software.
 ## Installation
 
 ```shell
-go install github.com/dbohdan/age-edit@latest
+go install dbohdan.com/age-edit@latest
 ```
 
 ## Usage

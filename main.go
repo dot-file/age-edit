@@ -21,7 +21,7 @@ const (
 	defaultTempDirPrefix = "/dev/shm/"
 	filePerm             = 0o600
 	tempDirPerm          = 0o700
-	version              = "0.6.1"
+	version              = "0.6.2"
 )
 
 type encryptError struct {

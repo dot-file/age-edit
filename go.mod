@@ -1,4 +1,4 @@
-module github.com/dbohdan/age-edit
+module dbohdan.com/age-edit
 
 go 1.21
 
