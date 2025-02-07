@@ -80,7 +80,8 @@ zstd -7 --long < "$decompressed" > "$1"
 ## Security and other considerations
 
 The age identities (private keys) from the keyfile are kept in memory while the encrypted file is being edited.
-This memory can be accessed by the user's other programs or read from the swap if age-edit is swapped out.
+On POSIX systems, the program locks its memory pages using [`mlockall`](https://pubs.opengroup.org/onlinepubs/009696699/functions/mlockall.html) to prevent them from being swapped to disk.
+No attempt to prevent the swapping of the process is made on other systems like Windows.
 The decrypted contents of the file is stored in the directory `${USER}/age-edit/` at a temporary location.
 This location defaults to `/dev/shm/`.
 Other programs run by the same user can access it there, and it can also be swapped out.

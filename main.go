@@ -21,7 +21,7 @@ const (
 	defaultTempDirPrefix = "/dev/shm/"
 	filePerm             = 0o600
 	tempDirPerm          = 0o700
-	version              = "0.6.2"
+	version              = "0.7.0"
 )
 
 type encryptError struct {
@@ -229,6 +229,11 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 }
 
 func cli() int {
+	if err := lockMemory(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		return 1
+	}
+
 	armored := flag.BoolP(
 		"armor",
 		"a",
@@ -328,7 +333,7 @@ func cli() int {
 				"Press <enter> to delete temporary file %q\n",
 				encErr.tempFile,
 			)
-			fmt.Scanln()
+			_, _ = fmt.Scanln()
 		}
 
 		return 1
