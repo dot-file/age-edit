@@ -10,7 +10,7 @@ When you run age-edit with a private-keys file and an encrypted file as argument
 
 1. Decrypt the contents of the file encrypted with age to a temporary file using one of the private keys.
 2. Run an editor on the temporary file.
-  (The default editor is [`VISUAL` or `EDITOR`](https://unix.stackexchange.com/questions/4859/visual-vs-editor-what-s-the-difference), but it can be, e.g., LibreOffice.)
+   (The default editor is [`VISUAL` or `EDITOR`](https://unix.stackexchange.com/questions/4859/visual-vs-editor-what-s-the-difference), but it can be, e.g., LibreOffice.)
 3. Wait for the editor to exit.
 4. Encrypt the temporary file with public keys derived from the private keys.
    The encrypted file can be optionally "armored": stored as ASCII text in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format.
@@ -45,7 +45,7 @@ go install dbohdan.com/age-edit@latest
 
 ## Usage
 
-```
+```none
 Usage: age-edit [options] identities encrypted-file
 
 Options:
@@ -80,11 +80,14 @@ zstd -7 --long < "$decompressed" > "$1"
 ## Security and other considerations
 
 The age identities (private keys) from the keyfile are kept in memory while the encrypted file is being edited.
-On POSIX systems, the program locks its memory pages using [`mlockall`](https://pubs.opengroup.org/onlinepubs/009696699/functions/mlockall.html) to prevent them from being swapped to disk.
-No attempt to prevent the swapping of the process is made on other systems like Windows.
-The decrypted contents of the file is stored in the directory `${USER}/age-edit/` at a temporary location.
-This location defaults to `/dev/shm/`.
-Other programs run by the same user can access it there, and it can also be swapped out.
+On POSIX systems, the program locks its memory pages using [`mlockall`](https://pubs.opengroup.org/onlinepubs/9799919799/functions/mlockall.html) to prevent being swapped to disk.
+The process memory may be saved in unencrypted swap if the system is suspended to disk.
+No attempt to prevent the swapping of the process is made on non-POSIX systems like Windows.
+
+The decrypted contents of the file is stored by default in the directory `/dev/shm/${USER}/age-edit/`.
+You can change this to `/custom/path/${USER}/age-edit/`.
+Other programs run by the same user can access the decrypted file contents.
+`/dev/shm/` can be swapped out.
 
 age-edit doesn't work with multi-document editors.
 
