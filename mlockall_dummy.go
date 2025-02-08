@@ -1,4 +1,4 @@
-//go:build ios || js || plan9 || wasip1 || windows
+//go:build !(aix || android || darwin || dragonfly || freebsd || illumos || linux || netbsd || openbsd || solaris)
 
 package main
 
