@@ -53,7 +53,7 @@ Options:
   -e, --editor string     command to use for editing the encrypted file
   -r, --read-only         discard all changes
   -t, --temp-dir string   temporary directory prefix (default "/dev/shm/")
-  -v, --version           report the program version and exit
+  -V, --version           report the program version and exit
   -w, --warn int          warn if the editor exits after less than a number seconds (zero to disable)
 ```
 

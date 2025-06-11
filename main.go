@@ -21,7 +21,7 @@ const (
 	defaultTempDirPrefix = "/dev/shm/"
 	filePerm             = 0o600
 	tempDirPerm          = 0o700
-	version              = "0.7.1"
+	version              = "0.8.0"
 )
 
 type encryptError struct {
@@ -254,7 +254,7 @@ func cli() int {
 	)
 	showVersion := flag.BoolP(
 		"version",
-		"v",
+		"V",
 		false,
 		"report the program version and exit",
 	)
