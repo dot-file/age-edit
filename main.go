@@ -245,7 +245,7 @@ func cli() int {
 		"armor",
 		"a",
 		false,
-		"write armored age file",
+		"write an armored age file",
 	)
 	editorFlag := flag.StringP(
 		"editor",

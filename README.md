@@ -49,7 +49,7 @@ go install dbohdan.com/age-edit@latest
 Usage: age-edit [options] identities encrypted-file
 
 Options:
-  -a, --armor             write armored age file
+  -a, --armor             write an armored age file
   -e, --editor string     command to use for editing the encrypted file
   -r, --read-only         make the temporary file read-only and discard all changes
   -t, --temp-dir string   temporary directory prefix (default "/dev/shm/")
