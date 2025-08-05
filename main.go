@@ -20,6 +20,7 @@ import (
 const (
 	defaultTempDirPrefix = "/dev/shm/"
 	filePerm             = 0o600
+	fileReadOnlyPerm     = 0o400
 	tempDirPerm          = 0o700
 	version              = "0.8.0"
 )
@@ -210,6 +211,12 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 		}
 	}
 
+	if readOnly {
+		if err = os.Chmod(tempFile.Name(), fileReadOnlyPerm); err != nil {
+			return
+		}
+	}
+
 	cmd := exec.Command(editor, tempFile.Name())
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -250,7 +257,7 @@ func cli() int {
 		"read-only",
 		"r",
 		false,
-		"discard all changes",
+		"make the temporary file read-only and discard all changes",
 	)
 	showVersion := flag.BoolP(
 		"version",

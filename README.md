@@ -51,7 +51,7 @@ Usage: age-edit [options] identities encrypted-file
 Options:
   -a, --armor             write armored age file
   -e, --editor string     command to use for editing the encrypted file
-  -r, --read-only         discard all changes
+  -r, --read-only         make the temporary file read-only and discard all changes
   -t, --temp-dir string   temporary directory prefix (default "/dev/shm/")
   -V, --version           report the program version and exit
   -w, --warn int          warn if the editor exits after less than a number seconds (zero to disable)

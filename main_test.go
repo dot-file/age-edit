@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"filippo.io/age"
@@ -161,5 +163,117 @@ func TestLoadIdentities(t *testing.T) {
 		if len(ids) != len(recs) {
 			t.Errorf("loadIdentities(%q) returned mismatched identities and recipients", tt.content)
 		}
+	}
+}
+
+func createBatchFile(t *testing.T, tempDir string) (string, error) {
+	batchFile := filepath.Join(tempDir, "true.cmd")
+	if err := os.WriteFile(batchFile, []byte("@echo off\nexit 0"), 0o700); err != nil {
+		return "", err
+	}
+	return batchFile, nil
+}
+
+func TestEdit(t *testing.T) {
+	identity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatalf("failed to generate identity: %v", err)
+	}
+
+	idFile, err := os.CreateTemp("", "identities")
+	if err != nil {
+		t.Fatalf("failed to create temp identity file: %v", err)
+	}
+	defer os.Remove(idFile.Name())
+	_, _ = idFile.WriteString(identity.String())
+	idFile.Close()
+
+	tests := []struct {
+		name            string
+		readOnly        bool
+		checkFn         func(t *testing.T, tempDir string)
+		expectEditError bool
+	}{
+		{
+			name:     "read-only mode",
+			readOnly: true,
+			checkFn: func(t *testing.T, tempDir string) {
+				files, err := os.ReadDir(tempDir)
+				if err != nil {
+					t.Fatalf("could not read temp dir: %v", err)
+				}
+				if len(files) != 1 {
+					t.Fatalf("expected 1 file in temp dir, got %d", len(files))
+				}
+				tempFilePath := filepath.Join(tempDir, files[0].Name())
+				info, err := os.Stat(tempFilePath)
+				if err != nil {
+					t.Fatalf("could not stat temp file: %v", err)
+				}
+
+				// The permissions should be read-only.
+				perm := info.Mode().Perm()
+				refPerm := os.FileMode(0o400)
+				if perm != refPerm && !(runtime.GOOS == "windows" && perm&0o700 == refPerm) {
+					t.Errorf("expected temp file permissions to be %o, got %o", refPerm, perm)
+				}
+			},
+			expectEditError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create encrypted file with some content.
+			content := "secret content"
+			plainFile, err := os.CreateTemp("", "plain")
+			if err != nil {
+				t.Fatalf("failed to create temp plain file: %v", err)
+			}
+			defer os.Remove(plainFile.Name())
+			if _, err := plainFile.WriteString(content); err != nil {
+				t.Fatalf("failed to write to plain file: %v", err)
+			}
+			plainFile.Close()
+
+			encFile, err := os.CreateTemp("", "encrypted")
+			if err != nil {
+				t.Fatalf("failed to create temp encrypted file: %v", err)
+			}
+			defer os.Remove(encFile.Name())
+
+			if err := encryptToFile(plainFile.Name(), encFile.Name(), false, identity.Recipient()); err != nil {
+				t.Fatalf("failed to encrypt file for test: %v", err)
+			}
+
+			// Create a temporary directory.
+			tempDirPrefix, err := os.MkdirTemp("", "age-edit-test")
+			if err != nil {
+				t.Fatalf("failed to create temp dir for test: %v", err)
+			}
+			defer os.RemoveAll(tempDirPrefix)
+
+			// Call edit.
+			editor := "true"
+			if runtime.GOOS == "windows" {
+				batchFile, err := createBatchFile(t, tempDirPrefix)
+				if err != nil {
+					t.Fatalf("failed to create batch file: %v", err)
+				}
+				editor = batchFile
+			}
+
+			tempDir, err := edit(idFile.Name(), encFile.Name(), tempDirPrefix, false, editor, tt.readOnly)
+			if (err != nil) != tt.expectEditError {
+				t.Fatalf("edit() error = %v, expectEditError %v", err, tt.expectEditError)
+			}
+			if err == nil && tempDir != "" {
+				defer os.RemoveAll(tempDir)
+			}
+
+			if tt.checkFn != nil {
+				tt.checkFn(t, tempDir)
+			}
+		})
 	}
 }
