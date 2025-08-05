@@ -3,7 +3,7 @@ module dbohdan.com/age-edit
 go 1.21
 
 require (
-	filippo.io/age v1.2.0
+	filippo.io/age v1.2.1
 	github.com/cornfeedhobo/pflag v1.1.0
 	golang.org/x/sys v0.30.0
 )
