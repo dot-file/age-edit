@@ -14,6 +14,7 @@ import (
 
 	"filippo.io/age"
 	"filippo.io/age/armor"
+	"github.com/carlmjohnson/crockford"
 	flag "github.com/cornfeedhobo/pflag"
 )
 
@@ -22,7 +23,7 @@ const (
 	filePerm             = 0o600
 	fileReadOnlyPerm     = 0o400
 	tempDirPerm          = 0o700
-	version              = "0.8.0"
+	version              = "0.9.0"
 )
 
 type encryptError struct {
@@ -102,6 +103,12 @@ func encryptToFile(inputPath, outputPath string, armored bool, recipients ...age
 		_, err = io.Copy(encryptWriter, in)
 		return err
 	})
+}
+
+func randomID() string {
+	buf := make([]byte, 0, 8)
+	buf = crockford.AppendRandom(crockford.Lower, buf)
+	return string(buf)
 }
 
 func getRoot(path string) string {
@@ -191,33 +198,29 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 		return
 	}
 
-	tempDir = filepath.Join(tempDirPrefix, currentUser.Username+"-age-edit")
+	subdir := randomID()
+	tempDir = filepath.Join(tempDirPrefix, "age-edit-"+currentUser.Username, subdir)
 	err = os.MkdirAll(tempDir, tempDirPerm)
 	if err != nil {
 		return
 	}
 
 	rootname := getRoot(encPath)
-	var tempFile *os.File
-	tempFile, err = os.CreateTemp(tempDir, "*"+filepath.Base(rootname))
-	if err != nil {
-		return
-	}
-	tempFile.Close()
+	tempFile := filepath.Join(tempDir, filepath.Base(rootname))
 
 	if exists {
-		if err = decryptToFile(encPath, tempFile.Name(), identities...); err != nil {
+		if err = decryptToFile(encPath, tempFile, identities...); err != nil {
 			return
 		}
 	}
 
 	if readOnly {
-		if err = os.Chmod(tempFile.Name(), fileReadOnlyPerm); err != nil {
+		if err = os.Chmod(tempFile, fileReadOnlyPerm); err != nil {
 			return
 		}
 	}
 
-	cmd := exec.Command(editor, tempFile.Name())
+	cmd := exec.Command(editor, tempFile)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -226,8 +229,8 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 	}
 
 	if !readOnly {
-		if err = encryptToFile(tempFile.Name(), encPath, armor, recipients...); err != nil {
-			err = &encryptError{err: err, tempFile: tempFile.Name()}
+		if err = encryptToFile(tempFile, encPath, armor, recipients...); err != nil {
+			err = &encryptError{err: err, tempFile: tempFile}
 			return
 		}
 	}
@@ -320,6 +323,9 @@ func cli() int {
 
 	tempDir, err := edit(keyPath, filename, *tempDirPrefix, *armored, editor, *readOnly)
 	if tempDir != "" {
+		// Remove the "age-edit-"+username directory if empty
+		// after removing the temporary file and the random subdirectory.
+		defer os.Remove(filepath.Dir(tempDir))
 		defer os.RemoveAll(tempDir)
 	}
 

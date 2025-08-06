@@ -85,8 +85,8 @@ On POSIX systems, the program locks its memory pages using [`mlockall`](https://
 The process memory may be saved in unencrypted swap if the system is suspended to disk.
 No attempt to prevent the swapping of the process is made on non-POSIX systems like Windows.
 
-The decrypted contents of the file is stored by default in the directory `/dev/shm/${USER}/age-edit/`.
-You can change this to `/custom/path/${USER}/age-edit/`.
+The decrypted contents of the file is stored by default in the directory `/dev/shm/age-edit-${USER}/abcd0123/`, where `abcd0123` is random.
+You can change this to `/custom/path/age-edit-${USER}/abcd0123/`.
 Other programs run by the same user can access the decrypted file contents.
 `/dev/shm/` can be swapped out.
 
