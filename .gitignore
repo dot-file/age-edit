@@ -3,6 +3,7 @@
 *.gpg
 *.swp
 *.txt
+/.task/
 
 /age-edit
 /help

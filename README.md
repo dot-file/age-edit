@@ -31,6 +31,7 @@ age-edit is beta-quality software.
 ### Build
 
 - Go 1.21
+- Optional: [Task](https://taskfile.dev/) (go-task) 3.28
 
 ### Runtime
 

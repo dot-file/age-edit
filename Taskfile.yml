@@ -1,0 +1,43 @@
+version: '3'
+
+vars:
+  ext: '{{if eq OS "windows"}}.exe{{end}}'
+
+env:
+  CGO_ENABLED: 0
+
+tasks:
+  default:
+    deps:
+      - all
+
+  all:
+    desc: 'Build and test everything'
+    deps:
+      - test
+
+  build:
+    desc: 'Build all components'
+    deps:
+      - build-age-edit
+
+  build-age-edit:
+    desc: 'Build the age-edit executable'
+    cmds:
+      - cmd: go build -trimpath
+    sources:
+      - '*.go'
+    generates:
+      - age-edit
+
+  clean:
+    desc: 'Clean up executables'
+    cmds:
+      - rm -f age-edit{{.ext}}
+
+  test:
+    desc: 'Run tests'
+    deps:
+      - build-age-edit
+    cmds:
+      - go test ./...
