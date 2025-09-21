@@ -58,6 +58,22 @@ Options:
   -w, --warn int          warn if the editor exits after less than a number seconds (zero to disable)
 ```
 
+## Using age-edit with pago
+
+You can use age-edit with a private key stored in [pago](https://github.com/dbohdan/pago) or a similar password manager.
+Invoke age-edit like this:
+
+```shell
+# Bash
+age-edit -a <(pago show secret.key) secret.txt
+```
+
+```fish
+# fish shell
+# `--fifo` avoids writing the secret key to a temporary file.
+age-edit -a (pago show secret.key | psub --fifo) secret.txt
+```
+
 ## Editing compressed files
 
 With a shell script like this, you can edit compressed files using age-edit.
