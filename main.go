@@ -212,8 +212,14 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 		return
 	}
 
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+
+	userDir := fmt.Sprintf("age-edit-%s@%s", currentUser.Username, hostname)
 	subdir := randomID()
-	tempDir = filepath.Join(tempDirPrefix, "age-edit-"+currentUser.Username, subdir)
+	tempDir = filepath.Join(tempDirPrefix, userDir, subdir)
 	err = os.MkdirAll(tempDir, tempDirPerm)
 	if err != nil {
 		return
@@ -449,7 +455,7 @@ An identities file and an encrypted file, given in the arguments or the environm
 
 	tempDir, err := edit(keyPath, filename, *tempDirPrefix, *armored, *editorFlag, *readOnly)
 	if tempDir != "" {
-		// Remove the "age-edit-"+username directory if empty
+		// Remove the "age-edit-..." directory if empty
 		// after removing the temporary file and the random subdirectory.
 		defer os.Remove(filepath.Dir(tempDir))
 		defer os.RemoveAll(tempDir)
