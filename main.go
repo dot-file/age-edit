@@ -16,7 +16,7 @@ import (
 	"filippo.io/age"
 	"filippo.io/age/armor"
 	"github.com/carlmjohnson/crockford"
-	flag "github.com/cornfeedhobo/pflag"
+	"github.com/spf13/pflag"
 )
 
 const (
@@ -27,7 +27,6 @@ const (
 	tempDirPerm      = 0o700
 
 	armorEnvVar          = "AGE_EDIT_ARMOR"
-	editorEnvVar         = "AGE_EDIT_EDITOR"
 	encryptedFileEnvVar  = "AGE_EDIT_ENCRYPTED_FILE"
 	identitiesFileEnvVar = "AGE_EDIT_IDENTITIES_FILE"
 	readOnlyEnvVar       = "AGE_EDIT_READ_ONLY"
@@ -35,6 +34,10 @@ const (
 	warnEnvVar           = "AGE_EDIT_WARN"
 
 	version = "0.10.0"
+)
+
+var (
+	editorEnvVars = []string{"AGE_EDIT_EDITOR", "VISUAL", "EDITOR"}
 )
 
 type encryptError struct {
@@ -252,10 +255,10 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 func defaultBool(s string) bool {
 	switch strings.ToLower(s) {
 
-	case "1", "true":
+	case "1", "true", "yes":
 		return true
 
-	case "0", "false":
+	case "0", "false", "no":
 		return false
 
 	default:
@@ -269,18 +272,14 @@ func defaultArmor() bool {
 }
 
 func defaultEditor() string {
-	editor := os.Getenv(editorEnvVar)
-	if editor == "" {
-		editor = os.Getenv("VISUAL")
-	}
-	if editor == "" {
-		editor = os.Getenv("EDITOR")
-	}
-	if editor == "" {
-		editor = "vi"
+	for _, envVar := range editorEnvVars {
+		value := os.Getenv(envVar)
+		if value != "" {
+			return value
+		}
 	}
 
-	return editor
+	return "vi"
 }
 
 func defaultReadOnly() bool {
@@ -315,23 +314,25 @@ func cli() int {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		return 1
 	}
+
+	flag := pflag.NewFlagSet("age-edit", pflag.ExitOnError)
 	armored := flag.BoolP(
 		"armor",
 		"a",
 		defaultArmor(),
-		"write an armored age file",
+		fmt.Sprintf("write an armored age file (%v)", armorEnvVar),
 	)
 	editorFlag := flag.StringP(
 		"editor",
 		"e",
 		defaultEditor(),
-		"command to use for editing the encrypted file",
+		fmt.Sprintf("command to use for editing the encrypted file (%v)", strings.Join(editorEnvVars, ", ")),
 	)
 	readOnly := flag.BoolP(
 		"read-only",
 		"r",
 		defaultReadOnly(),
-		"make the temporary file read-only and discard all changes",
+		fmt.Sprintf("make the temporary file read-only and discard all changes (%v)", readOnlyEnvVar),
 	)
 	showVersion := flag.BoolP(
 		"version",
@@ -343,39 +344,32 @@ func cli() int {
 		"temp-dir",
 		"t",
 		defaultTempDirPrefix(),
-		"temporary directory prefix",
+		fmt.Sprintf("temporary directory prefix (%v)", tempDirPrefixEnvVar),
 	)
 	warn := flag.IntP(
 		"warn",
 		"w",
 		defaultWarn(),
-		"warn if the editor exits after less than a number seconds (zero to disable)",
+		fmt.Sprintf("warn if the editor exits after less than a number seconds (%v, 0 to disable)", warnEnvVar),
 	)
 
 	flag.Usage = func() {
-		fmt.Fprintf(
-			os.Stderr,
-			"Usage: %s [options] [[identities-file] encrypted-file]\n\nOptions:\n",
+		message := fmt.Sprintf(
+			`Usage: %s [options] [[identities-file] encrypted-file]
+
+Options:
+%s
+An identities file and an encrypted file, given in the arguments or the environment variables, are required. Boolean environment variables accept 0, 1, true, false, yes, no. Invalid values of boolean and numeric environment variables are discarded.
+`,
 			filepath.Base(os.Args[0]),
+			// Merge "(default ...)" with our own parentheticals.
+			strings.ReplaceAll(flag.FlagUsages(), ") (", ", "),
 		)
 
-		flag.PrintDefaults()
-
-		fmt.Fprint(os.Stderr, `
-Environment variables:
-  AGE_EDIT_ARMOR            Same as -a, --armor. Accepts 0, 1, true, false.
-  AGE_EDIT_EDITOR           Same as -e, --editor.
-  AGE_EDIT_ENCRYPTED_FILE   Path to the encrypted file.
-  AGE_EDIT_IDENTITIES_FILE  Path to the identities file.
-  AGE_EDIT_READ_ONLY        Same as -r, --read-only. Accepts 0, 1, true, false.
-  AGE_EDIT_TEMP_DIR         Same as -t, --temp-dir.
-  AGE_EDIT_WARN             Same as -w, --warn.
-
-An identities file and an encrypted file, given in the arguments or the environment variables, are required. Invalid values of environment variables are discarded.
-`)
+		fmt.Fprint(os.Stderr, message)
 	}
 
-	flag.Parse()
+	flag.Parse(os.Args[1:])
 
 	if *showVersion {
 		fmt.Println(version)

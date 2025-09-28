@@ -50,23 +50,21 @@ go install dbohdan.com/age-edit@latest
 Usage: age-edit [options] [[identities-file] encrypted-file]
 
 Options:
-  -a, --armor             write an armored age file
-  -e, --editor string     command to use for editing the encrypted file (default "vim")
-  -r, --read-only         make the temporary file read-only and discard all changes
-  -t, --temp-dir string   temporary directory prefix (default "/dev/shm/")
+  -a, --armor             write an armored age file (AGE_EDIT_ARMOR)
+  -e, --editor string     command to use for editing the encrypted file
+(AGE_EDIT_EDITOR, VISUAL, EDITOR, default "vim")
+  -r, --read-only         make the temporary file read-only and discard all
+changes (AGE_EDIT_READ_ONLY)
+  -t, --temp-dir string   temporary directory prefix (AGE_EDIT_TEMP_DIR,
+default "/dev/shm/")
   -V, --version           report the program version and exit
-  -w, --warn int          warn if the editor exits after less than a number seconds (zero to disable)
+  -w, --warn int          warn if the editor exits after less than a number
+seconds (AGE_EDIT_WARN, 0 to disable)
 
-Environment variables:
-  AGE_EDIT_ARMOR            Same as -a, --armor. Accepts 0, 1, true, false.
-  AGE_EDIT_EDITOR           Same as -e, --editor.
-  AGE_EDIT_ENCRYPTED_FILE   Path to the encrypted file.
-  AGE_EDIT_IDENTITIES_FILE  Path to the identities file.
-  AGE_EDIT_READ_ONLY        Same as -r, --read-only. Accepts 0, 1, true, false.
-  AGE_EDIT_TEMP_DIR         Same as -t, --temp-dir.
-  AGE_EDIT_WARN             Same as -w, --warn.
-
-An identities file and an encrypted file, given in the arguments or the environment variables, are required. Invalid values of environment variables are discarded.
+An identities file and an encrypted file, given in the arguments or the
+environment variables, are required. Boolean environment variables accept 0, 1,
+true, false, yes, no. Invalid values of boolean and numeric environment
+variables are discarded.
 ```
 
 ## Using age-edit with pago
