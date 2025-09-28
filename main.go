@@ -252,23 +252,33 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 	return
 }
 
-func defaultBool(s string) bool {
+func parseBool(s string) (bool, error) {
+	if s == "" {
+		return false, nil
+	}
+
 	switch strings.ToLower(s) {
 
 	case "1", "true", "yes":
-		return true
+		return true, nil
 
 	case "0", "false", "no":
-		return false
+		return false, nil
 
 	default:
-		return false
-
+		return false, fmt.Errorf("invalid boolean value: %q", s)
 	}
 }
 
-func defaultArmor() bool {
-	return defaultBool(os.Getenv(armorEnvVar))
+func defaultArmor() (bool, error) {
+	val := os.Getenv(armorEnvVar)
+
+	b, err := parseBool(val)
+	if err != nil {
+		return false, fmt.Errorf("invalid boolean value for %s: %q", armorEnvVar, val)
+	}
+
+	return b, nil
 }
 
 func defaultEditor() string {
@@ -282,8 +292,15 @@ func defaultEditor() string {
 	return "vi"
 }
 
-func defaultReadOnly() bool {
-	return defaultBool(os.Getenv(readOnlyEnvVar))
+func defaultReadOnly() (bool, error) {
+	val := os.Getenv(readOnlyEnvVar)
+
+	b, err := parseBool(val)
+	if err != nil {
+		return false, fmt.Errorf("invalid boolean value for %s: %q", readOnlyEnvVar, val)
+	}
+
+	return b, nil
 }
 
 func defaultTempDirPrefix() string {
@@ -295,18 +312,18 @@ func defaultTempDirPrefix() string {
 	return prefix
 }
 
-func defaultWarn() int {
+func defaultWarn() (int, error) {
 	val := os.Getenv(warnEnvVar)
 	if val == "" {
-		return 0
+		return 0, nil
 	}
 
 	i, err := strconv.Atoi(val)
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("invalid integer value for %s: %q", warnEnvVar, val)
 	}
 
-	return i
+	return i, nil
 }
 
 func cli() int {
@@ -315,11 +332,29 @@ func cli() int {
 		return 1
 	}
 
+	defaultArmorVal, err := defaultArmor()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		return 2
+	}
+
+	defaultReadOnlyVal, err := defaultReadOnly()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		return 2
+	}
+
+	defaultWarnVal, err := defaultWarn()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		return 2
+	}
+
 	flag := pflag.NewFlagSet("age-edit", pflag.ExitOnError)
 	armored := flag.BoolP(
 		"armor",
 		"a",
-		defaultArmor(),
+		defaultArmorVal,
 		fmt.Sprintf("write an armored age file (%v)", armorEnvVar),
 	)
 	editorFlag := flag.StringP(
@@ -331,7 +366,7 @@ func cli() int {
 	readOnly := flag.BoolP(
 		"read-only",
 		"r",
-		defaultReadOnly(),
+		defaultReadOnlyVal,
 		fmt.Sprintf("make the temporary file read-only and discard all changes (%v)", readOnlyEnvVar),
 	)
 	showVersion := flag.BoolP(
@@ -349,7 +384,7 @@ func cli() int {
 	warn := flag.IntP(
 		"warn",
 		"w",
-		defaultWarn(),
+		defaultWarnVal,
 		fmt.Sprintf("warn if the editor exits after less than a number seconds (%v, 0 to disable)", warnEnvVar),
 	)
 
@@ -359,7 +394,7 @@ func cli() int {
 
 Options:
 %s
-An identities file and an encrypted file, given in the arguments or the environment variables, are required. Boolean environment variables accept 0, 1, true, false, yes, no. Invalid values of boolean and numeric environment variables are discarded.
+An identities file and an encrypted file, given in the arguments or the environment variables, are required. Boolean environment variables accept 0, 1, true, false, yes, no.
 `,
 			filepath.Base(os.Args[0]),
 			// Merge "(default ...)" with our own parentheticals.

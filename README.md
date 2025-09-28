@@ -63,8 +63,7 @@ seconds (AGE_EDIT_WARN, 0 to disable)
 
 An identities file and an encrypted file, given in the arguments or the
 environment variables, are required. Boolean environment variables accept 0, 1,
-true, false, yes, no. Invalid values of boolean and numeric environment
-variables are discarded.
+true, false, yes, no.
 ```
 
 ## Using age-edit with pago
