@@ -448,7 +448,7 @@ An identities file and an encrypted file, given in the arguments or the environm
 		defer os.RemoveAll(tempDir)
 	}
 
-	if *warn > 0 && int(time.Now().Unix())-start <= int(*warn) {
+	if *warn > 0 && int(time.Now().Unix())-start <= *warn {
 		fmt.Fprintf(
 			os.Stderr,
 			"Warning: editor exited after less than %d second(s)\n",
