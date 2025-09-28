@@ -350,7 +350,7 @@ func cli() int {
 		return 2
 	}
 
-	flag := pflag.NewFlagSet("age-edit", pflag.ExitOnError)
+	flag := pflag.NewFlagSet("age-edit", pflag.ContinueOnError)
 	armored := flag.BoolP(
 		"armor",
 		"a",
@@ -404,7 +404,14 @@ An identities file and an encrypted file, given in the arguments or the environm
 		fmt.Fprint(os.Stderr, message)
 	}
 
-	flag.Parse(os.Args[1:])
+	if err := flag.Parse(os.Args[1:]); err != nil {
+		if err == pflag.ErrHelp {
+			return 0
+		}
+
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		return 2
+	}
 
 	if *showVersion {
 		fmt.Println(version)
