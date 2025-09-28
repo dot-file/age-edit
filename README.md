@@ -52,7 +52,7 @@ Usage: age-edit [options] [[identities-file] encrypted-file]
 Options:
   -a, --armor             write an armored age file (AGE_EDIT_ARMOR)
   -e, --editor string     command to use for editing the encrypted file
-(AGE_EDIT_EDITOR, VISUAL, EDITOR, default "vim")
+(AGE_EDIT_EDITOR, VISUAL, EDITOR, default "vi")
   -r, --read-only         make the temporary file read-only and discard all
 changes (AGE_EDIT_READ_ONLY)
   -t, --temp-dir string   temporary directory prefix (AGE_EDIT_TEMP_DIR,
