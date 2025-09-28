@@ -100,6 +100,8 @@ if [ -s "$1" ]; then
 fi
 "${VISUAL:-${EDITOR:-vi}}" "$decompressed"
 zstd -7 --long < "$decompressed" > "$1"
+
+rm "$decompressed"
 ```
 
 ## Security and other considerations
