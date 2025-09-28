@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,11 +20,21 @@ import (
 )
 
 const (
-	defaultTempDirPrefix = "/dev/shm/"
-	filePerm             = 0o600
-	fileReadOnlyPerm     = 0o400
-	tempDirPerm          = 0o700
-	version              = "0.9.0"
+	defaultTempDirPrefixLinux = "/dev/shm/"
+
+	filePerm         = 0o600
+	fileReadOnlyPerm = 0o400
+	tempDirPerm      = 0o700
+
+	armorEnvVar          = "AGE_EDIT_ARMOR"
+	editorEnvVar         = "AGE_EDIT_EDITOR"
+	encryptedFileEnvVar  = "AGE_EDIT_ENCRYPTED_FILE"
+	identitiesFileEnvVar = "AGE_EDIT_IDENTITIES_FILE"
+	readOnlyEnvVar       = "AGE_EDIT_READ_ONLY"
+	tempDirPrefixEnvVar  = "AGE_EDIT_TEMP_DIR"
+	warnEnvVar           = "AGE_EDIT_WARN"
+
+	version = "0.10.0"
 )
 
 type encryptError struct {
@@ -120,7 +131,7 @@ func checkAccess(path string, readOnly bool) (bool, error) {
 
 	if err != nil && os.IsNotExist(err) {
 		if readOnly {
-			return false, fmt.Errorf("%q doesn't exist; won't attempt to create it in read-only mode", path)
+			return false, fmt.Errorf("%q does not exist; won't attempt to create it in read-only mode", path)
 		}
 
 		return false, nil
@@ -238,28 +249,88 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 	return
 }
 
+func defaultBool(s string) bool {
+	switch strings.ToLower(s) {
+
+	case "1", "true":
+		return true
+
+	case "0", "false":
+		return false
+
+	default:
+		return false
+
+	}
+}
+
+func defaultArmor() bool {
+	return defaultBool(os.Getenv(armorEnvVar))
+}
+
+func defaultEditor() string {
+	editor := os.Getenv(editorEnvVar)
+	if editor == "" {
+		editor = os.Getenv("VISUAL")
+	}
+	if editor == "" {
+		editor = os.Getenv("EDITOR")
+	}
+	if editor == "" {
+		editor = "vi"
+	}
+
+	return editor
+}
+
+func defaultReadOnly() bool {
+	return defaultBool(os.Getenv(readOnlyEnvVar))
+}
+
+func defaultTempDirPrefix() string {
+	prefix := os.Getenv(tempDirPrefixEnvVar)
+	if prefix == "" {
+		prefix = defaultTempDirPrefixLinux
+	}
+
+	return prefix
+}
+
+func defaultWarn() int {
+	val := os.Getenv(warnEnvVar)
+	if val == "" {
+		return 0
+	}
+
+	i, err := strconv.Atoi(val)
+	if err != nil {
+		return 0
+	}
+
+	return i
+}
+
 func cli() int {
 	if err := lockMemory(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		return 1
 	}
-
 	armored := flag.BoolP(
 		"armor",
 		"a",
-		false,
+		defaultArmor(),
 		"write an armored age file",
 	)
 	editorFlag := flag.StringP(
 		"editor",
 		"e",
-		"",
+		defaultEditor(),
 		"command to use for editing the encrypted file",
 	)
 	readOnly := flag.BoolP(
 		"read-only",
 		"r",
-		false,
+		defaultReadOnly(),
 		"make the temporary file read-only and discard all changes",
 	)
 	showVersion := flag.BoolP(
@@ -271,24 +342,37 @@ func cli() int {
 	tempDirPrefix := flag.StringP(
 		"temp-dir",
 		"t",
-		defaultTempDirPrefix,
+		defaultTempDirPrefix(),
 		"temporary directory prefix",
 	)
 	warn := flag.IntP(
 		"warn",
 		"w",
-		0,
+		defaultWarn(),
 		"warn if the editor exits after less than a number seconds (zero to disable)",
 	)
 
 	flag.Usage = func() {
 		fmt.Fprintf(
 			os.Stderr,
-			"Usage: %s [options] identities encrypted-file\n\nOptions:\n",
+			"Usage: %s [options] [[identities-file] encrypted-file]\n\nOptions:\n",
 			filepath.Base(os.Args[0]),
 		)
 
 		flag.PrintDefaults()
+
+		fmt.Fprint(os.Stderr, `
+Environment variables:
+  AGE_EDIT_ARMOR            Same as -a, --armor. Accepts 0, 1, true, false.
+  AGE_EDIT_EDITOR           Same as -e, --editor.
+  AGE_EDIT_ENCRYPTED_FILE   Path to the encrypted file.
+  AGE_EDIT_IDENTITIES_FILE  Path to the identities file.
+  AGE_EDIT_READ_ONLY        Same as -r, --read-only. Accepts 0, 1, true, false.
+  AGE_EDIT_TEMP_DIR         Same as -t, --temp-dir.
+  AGE_EDIT_WARN             Same as -w, --warn.
+
+An identities file and an encrypted file, given in the arguments or the environment variables, are required. Invalid values of environment variables are discarded.
+`)
 	}
 
 	flag.Parse()
@@ -299,29 +383,35 @@ func cli() int {
 		return 0
 	}
 
-	if flag.NArg() < 2 {
-		flag.Usage()
-
+	if flag.NArg() > 2 {
+		fmt.Fprintln(
+			os.Stderr,
+			"Error: too many arguments",
+		)
 		return 2
 	}
 
-	editor := *editorFlag
-	if editor == "" {
-		editor = os.Getenv("VISUAL")
-	}
-	if editor == "" {
-		editor = os.Getenv("EDITOR")
-	}
-	if editor == "" {
-		editor = "vi"
+	filename := os.Getenv(encryptedFileEnvVar)
+	keyPath := os.Getenv(identitiesFileEnvVar)
+
+	if flag.NArg() == 1 {
+		filename = flag.Arg(0)
+	} else if flag.NArg() == 2 {
+		keyPath = flag.Arg(0)
+		filename = flag.Arg(1)
 	}
 
-	keyPath := flag.Arg(0)
-	filename := flag.Arg(1)
+	if keyPath == "" || filename == "" {
+		fmt.Fprintln(
+			os.Stderr,
+			"Error: need an identities file and an encrypted file",
+		)
+		return 2
+	}
 
 	start := int(time.Now().Unix())
 
-	tempDir, err := edit(keyPath, filename, *tempDirPrefix, *armored, editor, *readOnly)
+	tempDir, err := edit(keyPath, filename, *tempDirPrefix, *armored, *editorFlag, *readOnly)
 	if tempDir != "" {
 		// Remove the "age-edit-"+username directory if empty
 		// after removing the temporary file and the random subdirectory.
@@ -343,7 +433,7 @@ func cli() int {
 		if encErr, ok := err.(*encryptError); ok {
 			fmt.Fprintf(
 				os.Stderr,
-				"Press <enter> to delete temporary file %q\n",
+				"Press <Enter> to delete temporary file %q\n",
 				encErr.tempFile,
 			)
 			_, _ = fmt.Scanln()
