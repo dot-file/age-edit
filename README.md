@@ -50,7 +50,11 @@ go install dbohdan.com/age-edit@latest
 ## Usage
 
 ```none
-Usage: age-edit [options] [[identities-file] encrypted-file]
+Usage: age-edit [options] [[identities] encrypted]
+
+Arguments:
+  identities              identities file path (AGE_EDIT_IDENTITIES_FILE)
+  encrypted               encrypted file path (AGE_EDIT_ENCRYPTED_FILE)
 
 Options:
   -a, --armor             write an armored age file (AGE_EDIT_ARMOR)
@@ -119,7 +123,7 @@ On POSIX systems, the program locks its memory pages using [`mlockall`](https://
 The process memory may be saved in unencrypted swap if the system is suspended to disk.
 No attempt to prevent the swapping of the process is made on non-POSIX systems like Windows.
 
-The decrypted contents of the file is by default stored in the directory `/dev/shm/age-edit-${username}@${hostname}/abcd0123/`, where `abcd0123` is random.
+The decrypted contents of the file are by default stored in the directory `/dev/shm/age-edit-${username}@${hostname}/abcd0123/`, where `abcd0123` is random.
 You can change this to `/custom/path/age-edit-${username}@${hostname}/abcd0123/`.
 Other programs run by the same user can access the decrypted file contents.
 Note that `/dev/shm/` can be swapped out.

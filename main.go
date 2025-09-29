@@ -344,8 +344,22 @@ func defaultMemlock() (bool, error) {
 	return b, nil
 }
 
+func defaultArg(envVar string) (string, string) {
+	value := os.Getenv(envVar)
+
+	helpDefault := ""
+	if value != "" {
+		helpDefault = fmt.Sprintf(", default %q", value)
+	}
+
+	return value, helpDefault
+}
+
 func cli() int {
 	lockMemoryError := lockMemory()
+
+	encryptedFile, encryptedFileHelpDefault := defaultArg(encryptedFileEnvVar)
+	identitiesFile, identitiesFileHelpDefault := defaultArg(identitiesFileEnvVar)
 
 	defaultArmorVal, err := defaultArmor()
 	if err != nil {
@@ -417,13 +431,21 @@ func cli() int {
 
 	flag.Usage = func() {
 		message := fmt.Sprintf(
-			`Usage: %s [options] [[identities-file] encrypted-file]
+			`Usage: %s [options] [[identities] encrypted]
+
+Arguments:
+  identities              identities file path (%s%s)
+  encrypted               encrypted file path (%s%s)
 
 Options:
 %s
 An identities file and an encrypted file, given in the arguments or the environment variables, are required. Default values are read from environment variables with a built-in fallback. Boolean environment variables accept 0, 1, true, false, yes, no.
 `,
 			filepath.Base(os.Args[0]),
+			identitiesFileEnvVar,
+			identitiesFileHelpDefault,
+			encryptedFileEnvVar,
+			encryptedFileHelpDefault,
 			// Merge "(default ...)" with our own parentheticals.
 			strings.ReplaceAll(flag.FlagUsages(), ") (", ", "),
 		)
@@ -459,17 +481,14 @@ An identities file and an encrypted file, given in the arguments or the environm
 		return 2
 	}
 
-	filename := os.Getenv(encryptedFileEnvVar)
-	keyPath := os.Getenv(identitiesFileEnvVar)
-
 	if flag.NArg() == 1 {
-		filename = flag.Arg(0)
+		encryptedFile = flag.Arg(0)
 	} else if flag.NArg() == 2 {
-		keyPath = flag.Arg(0)
-		filename = flag.Arg(1)
+		identitiesFile = flag.Arg(0)
+		encryptedFile = flag.Arg(1)
 	}
 
-	if keyPath == "" || filename == "" {
+	if identitiesFile == "" || encryptedFile == "" {
 		fmt.Fprintln(
 			os.Stderr,
 			"Error: need an identities file and an encrypted file",
@@ -479,7 +498,7 @@ An identities file and an encrypted file, given in the arguments or the environm
 
 	start := int(time.Now().Unix())
 
-	tempDir, err := edit(keyPath, filename, *tempDirPrefix, *armored, *editorFlag, *readOnly)
+	tempDir, err := edit(identitiesFile, encryptedFile, *tempDirPrefix, *armored, *editorFlag, *readOnly)
 	if tempDir != "" {
 		// Remove the "age-edit-..." directory if empty
 		// after removing the temporary file and the random subdirectory.
