@@ -1,20 +1,21 @@
 # age-edit
 
 age-edit is an editor wrapper for files encrypted with [age](https://github.com/FiloSottile/age).
-age-edit is made primarily for Linux and uses `/dev/shm/` by default.
+age-edit is designed primarily for Linux and uses `/dev/shm/` by default.
 However, it supports and is automatically tested on FreeBSD, macOS, NetBSD, OpenBSD, and Windows.
-It is left to the user to choose a temporary directory prefix on those systems.
+On those systems, it is left to the user to choose a temporary directory prefix.
 
-Here is how age-edit works.
-When you run age-edit with a private-keys file and an encrypted file as arguments, it performs the following steps:
+## How age-edit works
 
-1. Decrypt the contents of the file encrypted with age to a temporary file using one of the private keys.
-2. Run an editor on the temporary file.
-   (The default editor is [`VISUAL` or `EDITOR`](https://unix.stackexchange.com/questions/4859/visual-vs-editor-what-s-the-difference), but it can be, e.g., LibreOffice.)
-3. Wait for the editor to exit.
-4. Encrypt the temporary file with public keys derived from the private keys.
+When you run age-edit with a identities (private-keys) file and an encrypted file, it performs the following steps:
+
+1. Decrypts the contents of the age-encrypted file to a temporary file using one of the identities (private keys).
+2. Opens an editor on the temporary file.
+   (The default editor is determined by the environment variables `AGE_EDIT_EDITOR`, [`VISUAL`, and `EDITOR`](https://unix.stackexchange.com/questions/4859/visual-vs-editor-what-s-the-difference) with `vi` as a fallback, but it can be any editor, e.g., LibreOffice.)
+3. Waits for the editor to exit.
+4. Encrypts the temporary file with public keys derived from the private keys.
    The encrypted file can be optionally "armored": stored as ASCII text in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format.
-5. Finally, delete the temporary file.
+5. Finally, deletes the temporary file.
 
 In other words, age-edit implements
 [a](https://wiki.tcl-lang.org/39218)
@@ -37,7 +38,7 @@ age-edit is beta-quality software.
 
 - Optional: a high limit on locked memory.
   This allows age-edit to use a function that prevents it from being swapped out.
-  See the [documentation](https://github.com/dbohdan/pago#memory-locking) for the pago password manager for how to configure the limit.
+  See the [documentation](https://github.com/dbohdan/pago#memory-locking) for the pago password manager for instructions on configuring the limit.
 - Optional: a temporary filesystem mounted on `/dev/shm/`.
   It is usually present on Linux with glibc.
 
@@ -123,10 +124,10 @@ On POSIX systems, the program locks its memory pages using [`mlockall`](https://
 The process memory may be saved in unencrypted swap if the system is suspended to disk.
 No attempt to prevent the swapping of the process is made on non-POSIX systems like Windows.
 
-The decrypted contents of the file are by default stored in the directory `/dev/shm/age-edit-${username}@${hostname}/abcd0123/`, where `abcd0123` is random.
+The decrypted contents of the file are stored by default in the directory `/dev/shm/age-edit-${username}@${hostname}/abcd0123/`, where `abcd0123` is random.
 You can change this to `/custom/path/age-edit-${username}@${hostname}/abcd0123/`.
 Other programs run by the same user can access the decrypted file contents.
-Note that `/dev/shm/` can be swapped out.
+Note that `/dev/shm/` can be swapped out when swap is enabled.
 
 age-edit doesn't work with multi-document editors.
 
