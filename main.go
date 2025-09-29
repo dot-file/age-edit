@@ -356,8 +356,6 @@ func defaultArg(envVar string) (string, string) {
 }
 
 func cli() int {
-	lockMemoryError := lockMemory()
-
 	encryptedFile, encryptedFileHelpDefault := defaultArg(encryptedFileEnvVar)
 	identitiesFile, identitiesFileHelpDefault := defaultArg(identitiesFileEnvVar)
 
@@ -462,11 +460,6 @@ An identities file and an encrypted file, given in the arguments or the environm
 		return 2
 	}
 
-	if !*noMemlock && lockMemoryError != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v. You may need to increase the limit on locked memory. Pass --no-memlock to suppress this error.\n", lockMemoryError)
-		return 1
-	}
-
 	if *showVersion {
 		fmt.Println(version)
 
@@ -494,6 +487,13 @@ An identities file and an encrypted file, given in the arguments or the environm
 			"Error: need an identities file and an encrypted file",
 		)
 		return 2
+	}
+
+	if !*noMemlock {
+		if err := lockMemory(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v. You may need to increase the limit on locked memory. Pass --no-memlock to suppress this error.\n", err)
+			return 1
+		}
 	}
 
 	start := int(time.Now().Unix())
