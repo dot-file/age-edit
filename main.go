@@ -29,10 +29,10 @@ const (
 	armorEnvVar          = "AGE_EDIT_ARMOR"
 	encryptedFileEnvVar  = "AGE_EDIT_ENCRYPTED_FILE"
 	identitiesFileEnvVar = "AGE_EDIT_IDENTITIES_FILE"
+	memlockEnvVar        = "AGE_EDIT_MEMLOCK"
 	readOnlyEnvVar       = "AGE_EDIT_READ_ONLY"
 	tempDirPrefixEnvVar  = "AGE_EDIT_TEMP_DIR"
 	warnEnvVar           = "AGE_EDIT_WARN"
-	useMemoryLockEnvVar  = "AGE_EDIT_USE_MEMORY_LOCK"
 
 	version = "0.10.0"
 )
@@ -259,9 +259,9 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 	return
 }
 
-func parseBool(s string) (bool, error) {
+func parseBool(s string, fallback bool) (bool, error) {
 	if s == "" {
-		return false, nil
+		return fallback, nil
 	}
 
 	switch strings.ToLower(s) {
@@ -280,7 +280,7 @@ func parseBool(s string) (bool, error) {
 func defaultArmor() (bool, error) {
 	val := os.Getenv(armorEnvVar)
 
-	b, err := parseBool(val)
+	b, err := parseBool(val, false)
 	if err != nil {
 		return false, fmt.Errorf("invalid boolean value for %s: %q", armorEnvVar, val)
 	}
@@ -302,7 +302,7 @@ func defaultEditor() string {
 func defaultReadOnly() (bool, error) {
 	val := os.Getenv(readOnlyEnvVar)
 
-	b, err := parseBool(val)
+	b, err := parseBool(val, false)
 	if err != nil {
 		return false, fmt.Errorf("invalid boolean value for %s: %q", readOnlyEnvVar, val)
 	}
@@ -333,19 +333,19 @@ func defaultWarn() (int, error) {
 	return i, nil
 }
 
-func defaultUseMemoryLock() (bool, error) {
-	val := os.Getenv(useMemoryLockEnvVar)
+func defaultMemlock() (bool, error) {
+	val := os.Getenv(memlockEnvVar)
 
-	b, err := parseBool(val)
+	b, err := parseBool(val, true)
 	if err != nil {
-		return false, fmt.Errorf("invalid boolean value for %s: %q", useMemoryLockEnvVar, val)
+		return false, fmt.Errorf("invalid boolean value for %s: %q", memlockEnvVar, val)
 	}
 
 	return b, nil
 }
 
 func cli() int {
-	lockMemoryResult := lockMemory()
+	lockMemoryError := lockMemory()
 
 	defaultArmorVal, err := defaultArmor()
 	if err != nil {
@@ -365,7 +365,7 @@ func cli() int {
 		return 2
 	}
 
-	defaultUseMemoryLockVal, err := defaultUseMemoryLock()
+	defaultMemlockVal, err := defaultMemlock()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		return 2
@@ -408,11 +408,11 @@ func cli() int {
 		defaultWarnVal,
 		fmt.Sprintf("warn if the editor exits after less than a number seconds (%v, 0 to disable)", warnEnvVar),
 	)
-	useMemoryLock := flag.BoolP(
-		"memory-lock",
-		"m",
-		defaultUseMemoryLockVal,
-		"lock memory (requires root)",
+	noMemlock := flag.BoolP(
+		"no-memlock",
+		"M",
+		!defaultMemlockVal,
+		fmt.Sprintf("disable mlockall(2) that prevents swapping (negated %v)", memlockEnvVar),
 	)
 
 	flag.Usage = func() {
@@ -440,8 +440,8 @@ An identities file and an encrypted file, given in the arguments or the environm
 		return 2
 	}
 
-	if *useMemoryLock && lockMemoryResult != nil {
-		fmt.Fprintln(os.Stderr, "Error:", lockMemoryResult, "\nYou might need to run this as root. You can also pass --memory-lock=false to suppress this error.")
+	if !*noMemlock && lockMemoryError != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v. You may need to increase the limit on locked memory. Pass --no-memlock to suppress this error.\n", lockMemoryError)
 		return 1
 	}
 

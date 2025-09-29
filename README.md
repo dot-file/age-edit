@@ -26,7 +26,7 @@ This gives you an opportunity to save the edited version of the file so you don'
 
 age-edit is beta-quality software.
 
-## Dependencies
+## Requirements
 
 ### Build
 
@@ -35,6 +35,9 @@ age-edit is beta-quality software.
 
 ### Runtime
 
+- Optional: a high limit on locked memory.
+  This allows age-edit to use a function that prevents it from being swapped out.
+  See the [documentation](https://github.com/dbohdan/pago#memory-locking) for the pago password manager for how to configure the limit.
 - Optional: a temporary filesystem mounted on `/dev/shm/`.
   It is usually present on Linux with glibc.
 
@@ -53,6 +56,8 @@ Options:
   -a, --armor             write an armored age file (AGE_EDIT_ARMOR)
   -e, --editor string     command to use for editing the encrypted file
 (AGE_EDIT_EDITOR, VISUAL, EDITOR, default "vi")
+  -M, --no-memlock        disable mlockall(2) that prevents swapping (negated
+AGE_EDIT_MEMLOCK)
   -r, --read-only         make the temporary file read-only and discard all
 changes (AGE_EDIT_READ_ONLY)
   -t, --temp-dir string   temporary directory prefix (AGE_EDIT_TEMP_DIR,
@@ -74,11 +79,13 @@ Invoke age-edit like this:
 
 ```shell
 # Bash
+# `pago show secret.key` outputs the private key to stdout.
 age-edit -a <(pago show secret.key) secret.txt
 ```
 
 ```fish
 # fish shell
+# `pago show secret.key` outputs the private key to stdout.
 # `--fifo` avoids writing the secret key to a temporary file.
 age-edit -a (pago show secret.key | psub --fifo) secret.txt
 ```
