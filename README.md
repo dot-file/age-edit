@@ -62,7 +62,8 @@ default "/dev/shm/")
 seconds (AGE_EDIT_WARN, 0 to disable)
 
 An identities file and an encrypted file, given in the arguments or the
-environment variables, are required. Boolean environment variables accept 0, 1,
+environment variables, are required. Default values are read from environment
+variables with a built-in fallback. Boolean environment variables accept 0, 1,
 true, false, yes, no.
 ```
 
