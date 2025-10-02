@@ -1,3 +1,38 @@
+# This is a fork of age-edit [original repository](https://github.com/dbohdan/age-edit) where it is packaged for Nix using gomod2nix and flakes.
+Commits from upstream are automatically [merged](https://github.com/dot-file/age-edit/blob/master/.github/workflows/update-gomod2nix.yml) and if they contain changes for go dependencies, new gomod2nix hashes are [generated](https://github.com/dot-file/age-edit/blob/master/.github/workflows/update-gomod2nix.yml).
+
+## Usage
+- You can run age-edit with a single command (don't forget to put two dashes before age-edit arguments):
+  ```nix
+  nix run github:dot-file/age-edit -- --version
+  ```
+- Or install it with flakes:
+  ```nix
+  {
+    # add age-edit flake to your inputs
+    inputs.age-edit = {
+      url = "github:dbohdan/age-edit";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # ensure that age-edit is an allowed argument to the outputs function
+    outputs = { self, nixpkgs, age-edit }: {
+      nixosConfigurations.yourHostName = nixpkgs.lib.nixosSystem {
+        modules = [
+          ({ pkgs, ... }: {
+            # add the age-edit overlay to make the package available through pkgs
+            nixpkgs.overlays = [ age-edit.overlays.default ];
+
+            # install the package globally
+            environment.systemPackages = [ pkgs.age-edit ];
+          })
+        ];
+      };
+    };
+  }
+  ```
+
+The following is the original README:
 # age-edit
 
 age-edit is an editor wrapper for files encrypted with [age](https://github.com/FiloSottile/age).
