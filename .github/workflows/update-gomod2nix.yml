@@ -1,0 +1,34 @@
+name: Update gomod2nix
+
+on:
+  push:
+    paths:
+      - 'go.sum'
+      - 'go.mod'
+  pull_request:
+    paths:
+      - 'go.sum'
+      - 'go.mod'
+
+jobs:
+  gomod2nix-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Nix
+        uses: nixbuild/nix-quick-install-action@v28
+
+      - name: Update gomod2nix
+        run: nix develop -c 'gomod2nix' generate --outdir '${{ github.workspace }}'
+
+      - name: Commit and push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "<>"
+
+          git add .
+
+          git commit -m "Update gomod2nix"
+
+          git push
