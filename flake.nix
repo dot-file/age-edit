@@ -14,7 +14,7 @@
       flake-utils,
       gomod2nix,
     }:
-    (flake-utils.lib.eachDefaultSystem (
+    flake-utils.lib.eachDefaultSystem (
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
@@ -60,12 +60,20 @@
         checks = {
           inherit go-test go-lint;
         };
-        packages.default = callPackage ./. {
-          inherit (gomod2nix.legacyPackages.${system}) buildGoApplication;
+        packages = {
+          age-edit = callPackage ./. {
+            inherit (gomod2nix.legacyPackages.${system}) buildGoApplication;
+          };
+          default = self.packages.${system}.age-edit;
         };
         devShells.default = callPackage ./shell.nix {
           inherit (gomod2nix.legacyPackages.${system}) mkGoEnv gomod2nix;
         };
       }
-    ));
+    )
+    // {
+      overlays.default = final: prev: {
+        inherit (self.packages.${final.system}) age-edit;
+      };
+    };
 }
