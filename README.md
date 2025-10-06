@@ -1,4 +1,4 @@
-# This is a fork of age-edit [original repository](https://github.com/dbohdan/age-edit) where it is packaged for Nix using gomod2nix and flakes.
+# This is a fork of age-edit [original repository](https://github.com/dbohdan/age-edit), which provides a Nix package for it, created with gomod2nix.
 Commits from upstream are automatically [merged](https://github.com/dot-file/age-edit/blob/master/.github/workflows/update-gomod2nix.yml) and if they contain changes for go dependencies, new gomod2nix hashes are [generated](https://github.com/dot-file/age-edit/blob/master/.github/workflows/update-gomod2nix.yml).
 
 ## Usage
