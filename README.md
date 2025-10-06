@@ -13,7 +13,8 @@ When you run age-edit with a identities (private-keys) file and an encrypted fil
 2. Opens an editor on the temporary file.
    (The default editor is determined by the environment variables `AGE_EDIT_EDITOR`, [`VISUAL`, and `EDITOR`](https://unix.stackexchange.com/questions/4859/visual-vs-editor-what-s-the-difference) with `vi` as a fallback, but it can be any editor, e.g., LibreOffice.)
 3. Waits for the editor to exit.
-4. Encrypts the temporary file with public keys derived from the private keys.
+4. Checks if the temporary file has been modified by comparing its checksum ([BLAKE3](https://en.wikipedia.org/wiki/BLAKE3)) before and after editing.
+   If it has, encrypts the temporary file with public keys derived from the private keys.
    The encrypted file can be optionally "armored": stored as ASCII text in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format.
 5. Finally, deletes the temporary file.
 
@@ -31,7 +32,7 @@ age-edit is beta-quality software.
 
 ### Build
 
-- Go 1.21
+- Go 1.22
 - Optional: [Task](https://taskfile.dev/) (go-task) 3.28
 
 ### Runtime
