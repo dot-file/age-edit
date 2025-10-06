@@ -7,6 +7,9 @@ schema = 3
   [mod."github.com/carlmjohnson/crockford"]
     version = "v0.23.1"
     hash = "sha256-2Nq4cOjtmEIooJBnc6Pq+QtZspx+Ap4DaxWPK95avFM="
+  [mod."github.com/klauspost/cpuid/v2"]
+    version = "v2.0.9"
+    hash = "sha256-0rHlHzEVaDdkVbRJDhnAJjfJUmAHOYjXN5u7VoCi5uk="
   [mod."github.com/spf13/pflag"]
     version = "v1.0.10"
     hash = "sha256-uDPnWjHpSrzXr17KEYEA1yAbizfcsfo5AyztY2tS6ZU="
@@ -16,3 +19,6 @@ schema = 3
   [mod."golang.org/x/sys"]
     version = "v0.30.0"
     hash = "sha256-BuhWtwDkciVioc03rxty6G2vcZVnPX85lI7tgQOFVP8="
+  [mod."lukechampine.com/blake3"]
+    version = "v1.4.1"
+    hash = "sha256-HaZGo9L44ptPsgxIhvKy3+0KZZm1+xt+cZC1rDQA9Yc="
