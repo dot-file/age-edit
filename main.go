@@ -17,9 +17,12 @@ import (
 	"filippo.io/age/armor"
 	"github.com/carlmjohnson/crockford"
 	"github.com/spf13/pflag"
+	"lukechampine.com/blake3"
 )
 
 const (
+	digestSize = 32
+
 	defaultTempDirPrefixLinux = "/dev/shm/"
 
 	filePerm         = 0o600
@@ -34,19 +37,19 @@ const (
 	tempDirPrefixEnvVar  = "AGE_EDIT_TEMP_DIR"
 	warnEnvVar           = "AGE_EDIT_WARN"
 
-	version = "0.10.0"
+	version = "0.11.0"
 )
 
 var (
 	editorEnvVars = []string{"AGE_EDIT_EDITOR", "VISUAL", "EDITOR"}
 )
 
-type encryptError struct {
+type saveError struct {
 	err      error
 	tempFile string
 }
 
-func (e *encryptError) Error() string {
+func (e *saveError) Error() string {
 	return fmt.Sprintf("encryption failed: %v", e.err)
 }
 
@@ -130,6 +133,27 @@ func getRoot(path string) string {
 	return strings.TrimSuffix(path, ".age")
 }
 
+func checksumFile(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Return the checksum of an empty file.
+			h := blake3.New(digestSize, nil)
+			return h.Sum(nil), nil
+		}
+
+		return nil, err
+	}
+	defer f.Close()
+
+	h := blake3.New(digestSize, nil)
+	if _, err := io.Copy(h, f); err != nil {
+		return nil, err
+	}
+
+	return h.Sum(nil), nil
+}
+
 func checkAccess(path string, readOnly bool) (bool, error) {
 	_, err := os.Stat(path)
 
@@ -196,21 +220,20 @@ func loadIdentities(path string) ([]age.Identity, []age.Recipient, error) {
 	return identities, recipients, nil
 }
 
-func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, readOnly bool) (tempDir string, err error) {
-	var exists bool
-	exists, err = checkAccess(encPath, readOnly)
+func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, readOnly bool) (string, error) {
+	exists, err := checkAccess(encPath, readOnly)
 	if err != nil {
-		return
+		return "", err
 	}
 
 	identities, recipients, err := loadIdentities(idsPath)
 	if err != nil {
-		return
+		return "", err
 	}
 
 	currentUser, err := user.Current()
 	if err != nil {
-		return
+		return "", err
 	}
 
 	hostname, err := os.Hostname()
@@ -220,10 +243,10 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 
 	userDir := fmt.Sprintf("age-edit-%s@%s", currentUser.Username, hostname)
 	subdir := randomID()
-	tempDir = filepath.Join(tempDirPrefix, userDir, subdir)
+	tempDir := filepath.Join(tempDirPrefix, userDir, subdir)
 	err = os.MkdirAll(tempDir, tempDirPerm)
 	if err != nil {
-		return
+		return tempDir, err
 	}
 
 	rootname := getRoot(encPath)
@@ -231,13 +254,18 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 
 	if exists {
 		if err = decryptToFile(encPath, tempFile, identities...); err != nil {
-			return
+			return tempDir, err
 		}
+	}
+
+	beforeSum, err := checksumFile(tempFile)
+	if err != nil {
+		return tempDir, err
 	}
 
 	if readOnly {
 		if err = os.Chmod(tempFile, fileReadOnlyPerm); err != nil {
-			return
+			return tempDir, err
 		}
 	}
 
@@ -246,17 +274,23 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err = cmd.Run(); err != nil {
-		return
+		return tempDir, err
 	}
 
 	if !readOnly {
-		if err = encryptToFile(tempFile, encPath, armor, recipients...); err != nil {
-			err = &encryptError{err: err, tempFile: tempFile}
-			return
+		afterSum, err := checksumFile(tempFile)
+		if err != nil {
+			return tempDir, &saveError{err: err, tempFile: tempFile}
+		}
+
+		if !bytes.Equal(beforeSum, afterSum) {
+			if err = encryptToFile(tempFile, encPath, armor, recipients...); err != nil {
+				return tempDir, &saveError{err: err, tempFile: tempFile}
+			}
 		}
 	}
 
-	return
+	return tempDir, nil
 }
 
 func parseBool(s string, fallback bool) (bool, error) {
@@ -517,7 +551,7 @@ An identities file and an encrypted file, given in the arguments or the environm
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 
-		if encErr, ok := err.(*encryptError); ok {
+		if encErr, ok := err.(*saveError); ok {
 			fmt.Fprintf(
 				os.Stderr,
 				"Press <Enter> to delete temporary file %q\n",
