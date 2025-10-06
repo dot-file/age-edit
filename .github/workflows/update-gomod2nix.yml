@@ -22,7 +22,7 @@ jobs:
       - name: Update gomod2nix
         run: nix develop -c 'gomod2nix' generate --outdir '${{ github.workspace }}'
 
-      - name: Commit and push
+      - name: Git add and commit
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "<>"
@@ -31,4 +31,8 @@ jobs:
 
           git commit -m "Update gomod2nix"
 
-          git push
+      - name: Check if it builds and runs
+        run: nix run . -- --version
+
+      - name: Git push
+        run: git push
