@@ -69,7 +69,7 @@ changes (AGE_EDIT_READ_ONLY)
   -t, --temp-dir string   temporary directory prefix (AGE_EDIT_TEMP_DIR,
 default "/dev/shm/")
   -V, --version           report the program version and exit
-  -w, --warn int          warn if the editor exits after less than a number
+  -w, --warn int          warn if the editor exits after less than a number of
 seconds (AGE_EDIT_WARN, 0 to disable)
 
 An identities file and an encrypted file, given in the arguments or the
