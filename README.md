@@ -3,18 +3,18 @@
 age-edit is an editor wrapper for files encrypted with [age](https://github.com/FiloSottile/age).
 age-edit is designed primarily for Linux and uses `/dev/shm/` by default.
 However, it supports and is automatically tested on FreeBSD, macOS, NetBSD, OpenBSD, and Windows.
-On those systems, it is left to the user to choose a temporary directory prefix.
+On those systems, it is up to the user to choose a temporary directory prefix.
 
 ## How age-edit works
 
-When you run age-edit with a identities (private-keys) file and an encrypted file, it performs the following steps:
+When you run age-edit with an identities (private-keys) file and an encrypted file, it performs the following steps:
 
 1. Decrypts the contents of the age-encrypted file to a temporary file using one of the identities (private keys).
 2. Opens an editor on the temporary file.
    (The default editor is determined by the environment variables `AGE_EDIT_EDITOR`, [`VISUAL`, and `EDITOR`](https://unix.stackexchange.com/questions/4859/visual-vs-editor-what-s-the-difference) with `vi` as a fallback, but it can be any editor, e.g., LibreOffice.)
 3. Waits for the editor to exit.
 4. Checks if the temporary file has been modified by comparing its checksum ([BLAKE3](https://en.wikipedia.org/wiki/BLAKE3)) before and after editing.
-   If it has, encrypts the temporary file with public keys derived from the private keys.
+   If it has, age-edit encrypts the temporary file with public keys derived from the private keys.
    The encrypted file can be optionally "armored": stored as ASCII text in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format.
 5. Finally, deletes the temporary file.
 
@@ -23,7 +23,7 @@ In other words, age-edit implements
 "[with](https://www.python.org/dev/peps/pep-0343/)"
 [pattern](https://clojuredocs.org/clojure.core/with-open).
 
-If any error occurs between step 4 and 5, age-edit waits for you to press Enter to delete the temporary file.
+If any error occurs between steps 4 and 5, age-edit waits for you to press Enter to delete the temporary file.
 This gives you an opportunity to save the edited version of the file so you don't lose your edits.
 
 age-edit is beta-quality software.
