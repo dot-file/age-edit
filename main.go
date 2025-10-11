@@ -452,7 +452,7 @@ func cli() int {
 		"warn",
 		"w",
 		defaultWarnVal,
-		fmt.Sprintf("warn if the editor exits after less than a number seconds (%v, 0 to disable)", warnEnvVar),
+		fmt.Sprintf("warn if the editor exits after less than a number of seconds (%v, 0 to disable)", warnEnvVar),
 	)
 	noMemlock := flag.BoolP(
 		"no-memlock",
