@@ -45,9 +45,15 @@ age-edit is beta-quality software.
 
 ## Installation
 
+### Go
+
 ```shell
 go install dbohdan.com/age-edit@latest
 ```
+
+### Nix
+
+An [independent Nix package](https://github.com/dot-file/age-edit) is available for age-edit.
 
 ## Usage
 
