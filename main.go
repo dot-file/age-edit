@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -21,7 +22,14 @@ import (
 )
 
 const (
-	digestSize = 32
+	digestSize     = 32
+	randomIDLength = 8
+
+	exitOK       = 0
+	exitError    = 1
+	exitBadUsage = 2
+
+	cliMaxArgs = 2
 
 	defaultTempDirPrefixLinux = "/dev/shm/"
 
@@ -60,7 +68,7 @@ func wrapDecrypt(r io.Reader, identities ...age.Identity) (io.Reader, error) {
 	// Check if the input starts with an armor header.
 	n, err := io.ReadFull(r, buffer)
 	if err != nil && !errors.Is(err, io.EOF) && n < len(armor.Header) {
-		return nil, fmt.Errorf("failed to read header: %v", err)
+		return nil, fmt.Errorf("failed to read header: %w", err)
 	}
 
 	armored := string(buffer[:n]) == armor.Header
@@ -97,13 +105,14 @@ func decryptToFile(inputPath, outputPath string, identities ...age.Identity) err
 		}
 
 		_, err = io.Copy(out, d)
+
 		return err
 	})
 }
 
 func encryptToFile(inputPath, outputPath string, armored bool, recipients ...age.Recipient) error {
 	return withFiles(inputPath, outputPath, func(in io.Reader, out io.Writer) error {
-		var w io.Writer = out
+		w := out
 
 		if armored {
 			armorWriter := armor.NewWriter(out)
@@ -119,13 +128,15 @@ func encryptToFile(inputPath, outputPath string, armored bool, recipients ...age
 		defer encryptWriter.Close()
 
 		_, err = io.Copy(encryptWriter, in)
+
 		return err
 	})
 }
 
 func randomID() string {
-	buf := make([]byte, 0, 8)
+	buf := make([]byte, 0, randomIDLength)
 	buf = crockford.AppendRandom(crockford.Lower, buf)
+
 	return string(buf)
 }
 
@@ -139,6 +150,7 @@ func checksumFile(path string) ([]byte, error) {
 		if os.IsNotExist(err) {
 			// Return the checksum of an empty file.
 			h := blake3.New(digestSize, nil)
+
 			return h.Sum(nil), nil
 		}
 
@@ -169,13 +181,13 @@ func checkAccess(path string, readOnly bool) (bool, error) {
 	if err != nil {
 		return true, fmt.Errorf("can't read from file %q", path)
 	}
+
 	f.Close()
 
 	// If not in read-only mode, try to open for writing.
 	// We don't want writing to fail later, after the user edits the file.
 	if !readOnly {
-		f, err := os.OpenFile(path, os.O_RDWR, 0600)
-
+		f, err := os.OpenFile(path, os.O_RDWR, filePerm)
 		if err != nil {
 			return true, fmt.Errorf("can't write to file %q", path)
 		}
@@ -187,15 +199,16 @@ func checkAccess(path string, readOnly bool) (bool, error) {
 }
 
 func loadIdentities(path string) ([]age.Identity, []age.Recipient, error) {
-	var identities []age.Identity
-	var recipients []age.Recipient
-
 	identityData, err := os.ReadFile(path)
 	if err != nil {
-		return identities, recipients, fmt.Errorf("failed to read identities file: %v", err)
+		return nil, nil, fmt.Errorf("failed to read identities file: %w", err)
 	}
 
 	identityCount := 0
+	lines := strings.Split(string(identityData), "\n")
+	identities := make([]age.Identity, 0, len(lines))
+	recipients := make([]age.Recipient, 0, len(lines))
+
 	for _, line := range strings.Split(string(identityData), "\n") {
 		line := strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -206,7 +219,7 @@ func loadIdentities(path string) ([]age.Identity, []age.Recipient, error) {
 
 		identity, err := age.ParseX25519Identity(line)
 		if err != nil {
-			return identities, recipients, fmt.Errorf("failed to parse private key number %d: %v", identityCount, err)
+			return nil, nil, fmt.Errorf("failed to parse private key number %d: %w", identityCount, err)
 		}
 
 		identities = append(identities, identity)
@@ -214,7 +227,7 @@ func loadIdentities(path string) ([]age.Identity, []age.Recipient, error) {
 	}
 
 	if len(identities) == 0 {
-		return identities, recipients, fmt.Errorf("no identities found in file")
+		return identities, recipients, errors.New("no identities found in file")
 	}
 
 	return identities, recipients, nil
@@ -244,6 +257,7 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 	userDir := fmt.Sprintf("age-edit-%s@%s", currentUser.Username, hostname)
 	subdir := randomID()
 	tempDir := filepath.Join(tempDirPrefix, userDir, subdir)
+
 	err = os.MkdirAll(tempDir, tempDirPerm)
 	if err != nil {
 		return tempDir, err
@@ -269,10 +283,11 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, rea
 		}
 	}
 
-	cmd := exec.Command(editor, tempFile)
+	cmd := exec.CommandContext(context.Background(), editor, tempFile)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
 	if err = cmd.Run(); err != nil {
 		return tempDir, err
 	}
@@ -299,7 +314,6 @@ func parseBool(s string, fallback bool) (bool, error) {
 	}
 
 	switch strings.ToLower(s) {
-
 	case "1", "true", "yes":
 		return true, nil
 
@@ -396,25 +410,29 @@ func cli() int {
 	defaultArmorVal, err := defaultArmor()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
-		return 2
+
+		return exitBadUsage
 	}
 
 	defaultReadOnlyVal, err := defaultReadOnly()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
-		return 2
+
+		return exitBadUsage
 	}
 
 	defaultWarnVal, err := defaultWarn()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
-		return 2
+
+		return exitBadUsage
 	}
 
 	defaultMemlockVal, err := defaultMemlock()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
-		return 2
+
+		return exitBadUsage
 	}
 
 	flag := pflag.NewFlagSet("age-edit", pflag.ContinueOnError)
@@ -486,28 +504,31 @@ An identities file and an encrypted file, given in the arguments or the environm
 	}
 
 	if err := flag.Parse(os.Args[1:]); err != nil {
-		if err == pflag.ErrHelp {
-			return 0
+		if errors.Is(err, pflag.ErrHelp) {
+			return exitOK
 		}
 
 		fmt.Fprintln(os.Stderr, "Error:", err)
-		return 2
+
+		return exitBadUsage
 	}
 
 	if *showVersion {
 		fmt.Println(version)
 
-		return 0
+		return exitOK
 	}
 
-	if flag.NArg() > 2 {
+	if flag.NArg() > cliMaxArgs {
 		fmt.Fprintln(
 			os.Stderr,
 			"Error: too many arguments",
 		)
-		return 2
+
+		return exitBadUsage
 	}
 
+	//nolint:mnd
 	if flag.NArg() == 1 {
 		encryptedFile = flag.Arg(0)
 	} else if flag.NArg() == 2 {
@@ -520,13 +541,15 @@ An identities file and an encrypted file, given in the arguments or the environm
 			os.Stderr,
 			"Error: need an identities file and an encrypted file",
 		)
-		return 2
+
+		return exitBadUsage
 	}
 
 	if !*noMemlock {
 		if err := lockMemory(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v. You may need to increase the limit on locked memory. Pass --no-memlock to suppress this error.\n", err)
-			return 1
+
+			return exitError
 		}
 	}
 
@@ -551,19 +574,21 @@ An identities file and an encrypted file, given in the arguments or the environm
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 
-		if encErr, ok := err.(*saveError); ok {
+		var saveErr *saveError
+		if errors.As(err, &saveErr) {
 			fmt.Fprintf(
 				os.Stderr,
 				"Press <Enter> to delete temporary file %q\n",
-				encErr.tempFile,
+				saveErr.tempFile,
 			)
+
 			_, _ = fmt.Scanln()
 		}
 
-		return 1
+		return exitError
 	}
 
-	return 0
+	return exitOK
 }
 
 func main() {

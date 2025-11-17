@@ -10,7 +10,7 @@ import (
 
 func lockMemory() error {
 	if err := unix.Mlockall(unix.MCL_CURRENT | unix.MCL_FUTURE); err != nil {
-		return fmt.Errorf("failed to lock memory: %v", err)
+		return fmt.Errorf("failed to lock memory: %w", err)
 	}
 
 	return nil
