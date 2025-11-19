@@ -1,8 +1,5 @@
 version: '3'
 
-vars:
-  ext: '{{if eq OS "windows"}}.exe{{end}}'
-
 env:
   CGO_ENABLED: 0
 
@@ -42,7 +39,7 @@ tasks:
   clean:
     desc: 'Clean up executables'
     cmds:
-      - rm -f age-edit{{.ext}}
+      - rm -f age-edit{{exeExt}}
 
   lint:
     desc: 'Run golangci-lint'
