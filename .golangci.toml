@@ -132,6 +132,7 @@ line-length = 120
 
 [linters.settings.varnamelen]
 ignore-decls = [
+    "c chan os.Signal",
     "d time.Duration",
     "f *os.File",
     "i int",

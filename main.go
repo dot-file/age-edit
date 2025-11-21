@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"filippo.io/age"
@@ -285,7 +286,37 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, readOnly bool, com
 		}
 	}
 
-	cmd := exec.CommandContext(context.Background(), editor, tempFile)
+	var mu sync.Mutex
+
+	saveChanges := func() error {
+		mu.Lock()
+		defer mu.Unlock()
+
+		currentSum, err := checksumFile(tempFile)
+		if err != nil {
+			return err
+		}
+
+		if !bytes.Equal(beforeSum, currentSum) {
+			if err = encryptToFile(tempFile, encPath, armor, recipients...); err != nil {
+				return err
+			}
+
+			beforeSum = currentSum
+		}
+
+		return nil
+	}
+
+	if !readOnly {
+		stop := handleSignals(saveChanges)
+		defer stop()
+	}
+
+	fullArgs := append([]string{}, arg...)
+	fullArgs = append(fullArgs, tempFile)
+
+	cmd := exec.CommandContext(context.Background(), command, fullArgs...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -295,15 +326,8 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, readOnly bool, com
 	}
 
 	if !readOnly {
-		afterSum, err := checksumFile(tempFile)
-		if err != nil {
+		if err := saveChanges(); err != nil {
 			return tempDir, &saveError{err: err, tempFile: tempFile}
-		}
-
-		if !bytes.Equal(beforeSum, afterSum) {
-			if err = encryptToFile(tempFile, encPath, armor, recipients...); err != nil {
-				return tempDir, &saveError{err: err, tempFile: tempFile}
-			}
 		}
 	}
 
@@ -482,7 +506,7 @@ func cli() int {
 		"warn",
 		"w",
 		defaultWarnVal,
-		fmt.Sprintf("warn if the editor exits after less than a number of seconds (%v, 0 to disable)", warnEnvVar),
+		fmt.Sprintf("warn if the editor exits after less than a number of seconds (0 to disable, %v)", warnEnvVar),
 	)
 	noMemlock := flag.BoolP(
 		"no-memlock",
@@ -570,7 +594,6 @@ An identities file and an encrypted file, given in the arguments or the environm
 
 	if *commandFlag != "" {
 		args, err := shlex.Split(*commandFlag, true)
-
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error: failed to split command")
 			os.Exit(exitBadUsage)

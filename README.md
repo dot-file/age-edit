@@ -77,7 +77,7 @@ changes (AGE_EDIT_READ_ONLY)
 default "/dev/shm/")
   -V, --version           report the program version and exit
   -w, --warn int          warn if the editor exits after less than a number of
-seconds (AGE_EDIT_WARN, 0 to disable)
+seconds (0 to disable, AGE_EDIT_WARN)
 
 An identities file and an encrypted file, given in the arguments or the
 environment variables, are required. Default values are read from environment
@@ -124,6 +124,17 @@ zstd -7 --long < "$decompressed" > "$1"
 
 rm "$decompressed"
 ```
+
+## Saving without exiting
+
+On POSIX systems (BSD, Linux, macOS), you can send the `SIGUSR1` signal to the age-edit process to save changes to the encrypted file without closing the editor.
+This is useful for long editing sessions.
+
+```shell
+pkill -USR1 age-edit
+```
+
+If saving fails, age-edit will ring the [system bell](https://en.wikipedia.org/wiki/Bell_character) and print an error message to standard error.
 
 ## Security and other considerations
 
