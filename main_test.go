@@ -263,7 +263,7 @@ func TestEdit(t *testing.T) {
 				editor = batchFile
 			}
 
-			tempDir, err := edit(idFile.Name(), encFile.Name(), tempDirPrefix, false, editor, tt.readOnly)
+			tempDir, err := edit(idFile.Name(), encFile.Name(), tempDirPrefix, false, tt.readOnly, editor)
 			if (err != nil) != tt.expectEditError {
 				t.Fatalf("edit() error = %v, expectEditError %v", err, tt.expectEditError)
 			}

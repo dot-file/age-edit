@@ -92,6 +92,7 @@ An [independent Nix package](https://github.com/dot-file/age-edit) is available 
 
 ## Usage
 
+<!-- BEGIN USAGE -->
 ```none
 Usage: age-edit [options] [[identities] encrypted]
 
@@ -101,23 +102,31 @@ Arguments:
 
 Options:
   -a, --armor             write an armored age file (AGE_EDIT_ARMOR)
-  -e, --editor string     command to use for editing the encrypted file
-(AGE_EDIT_EDITOR, VISUAL, EDITOR, default "vi")
+  -c, --command string    command to run (overrides editor, AGE_EDIT_COMMAND)
+  -e, --editor string     editor executable to run (AGE_EDIT_EDITOR, VISUAL,
+EDITOR, default "vi")
   -M, --no-memlock        disable mlockall(2) that prevents swapping (negated
 AGE_EDIT_MEMLOCK)
   -r, --read-only         make the temporary file read-only and discard all
 changes (AGE_EDIT_READ_ONLY)
-  -t, --temp-dir string   temporary directory prefix (AGE_EDIT_TEMP_DIR,
-default "/dev/shm/")
+  -t, --temp-dir string   temporary directory prefix (AGE_EDIT_TEMP_DIR, default
+"/dev/shm/")
   -V, --version           report the program version and exit
   -w, --warn int          warn if the editor exits after less than a number of
-seconds (AGE_EDIT_WARN, 0 to disable)
+seconds (0 to disable, AGE_EDIT_WARN)
 
 An identities file and an encrypted file, given in the arguments or the
 environment variables, are required. Default values are read from environment
 variables with a built-in fallback. Boolean environment variables accept 0, 1,
 true, false, yes, no.
 ```
+<!-- END USAGE -->
+
+The `--editor` option can only specify the editor command to run; it doesn't allow arguments.
+Use the `--command` option to specify a command with arguments.
+
+The command string is split into arguments according to the rules of POSIX shell using [anmitsu/go-shlex](https://github.com/anmitsu/go-shlex).
+For example, `age-edit --command 'foo --bar "baz 5"'` runs `foo --bar 'baz 5' /path/to/temp-file` to edit the temporary file.
 
 ## Using age-edit with pago
 
@@ -159,6 +168,17 @@ zstd -7 --long < "$decompressed" > "$1"
 rm "$decompressed"
 ```
 
+## Saving without exiting
+
+On POSIX systems (BSD, Linux, macOS), you can send the `SIGUSR1` signal to the age-edit process to save changes to the encrypted file without closing the editor.
+This is useful for long editing sessions.
+
+```shell
+pkill -USR1 age-edit
+```
+
+If saving fails, age-edit will ring the [system bell](https://en.wikipedia.org/wiki/Bell_character) and print an error message to standard error.
+
 ## Security and other considerations
 
 The age identities (private keys) from the keyfile are kept in memory while the encrypted file is being edited.
@@ -170,6 +190,9 @@ The decrypted contents of the file are stored by default in the directory `/dev/
 You can change this to `/custom/path/age-edit-${username}@${hostname}/abcd0123/`.
 Other programs run by the same user can access the decrypted file contents.
 Note that `/dev/shm/` can be swapped out when swap is enabled.
+
+Temporary files and directories are created with restrictive permissions: 0600 for files and 0700 for directories.
+The read-only option sets the file permissions to 0400.
 
 age-edit doesn't work with multi-document editors.
 

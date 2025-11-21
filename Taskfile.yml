@@ -1,8 +1,5 @@
 version: '3'
 
-vars:
-  ext: '{{if eq OS "windows"}}.exe{{end}}'
-
 env:
   CGO_ENABLED: 0
 
@@ -14,12 +11,14 @@ tasks:
   all:
     desc: 'Build and test everything'
     deps:
+      - build
       - test
 
   build:
     desc: 'Build all components'
     deps:
       - build-age-edit
+      - build-readme
 
   build-age-edit:
     desc: 'Build the age-edit executable'
@@ -30,10 +29,35 @@ tasks:
     generates:
       - age-edit
 
+  build-readme:
+    desc: 'Update the usage section in "README.md" with current help'
+    deps:
+      - build-age-edit
+    cmds:
+      - go run ./script/readme ./age-edit --help
+    env:
+      AGE_EDIT_EDITOR: vi
+    status:
+      - main.go
+    generates:
+      - README.md
+
+  check:
+    desc: 'Build, lint, and test everything'
+    deps:
+      - build
+      - lint
+      - test
+
   clean:
     desc: 'Clean up executables'
     cmds:
-      - rm -f age-edit{{.ext}}
+      - rm -f age-edit{{exeExt}}
+
+  lint:
+    desc: 'Run golangci-lint'
+    cmds:
+      - golangci-lint run
 
   test:
     desc: 'Run tests'
