@@ -4,6 +4,7 @@ go 1.22
 
 require (
 	filippo.io/age v1.2.1
+	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be
 	github.com/carlmjohnson/crockford v0.23.1
 	github.com/spf13/pflag v1.0.10
 	golang.org/x/sys v0.30.0

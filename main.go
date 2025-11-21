@@ -16,6 +16,7 @@ import (
 
 	"filippo.io/age"
 	"filippo.io/age/armor"
+	"github.com/anmitsu/go-shlex"
 	"github.com/carlmjohnson/crockford"
 	"github.com/spf13/pflag"
 	"lukechampine.com/blake3"
@@ -38,6 +39,7 @@ const (
 	tempDirPerm      = 0o700
 
 	armorEnvVar          = "AGE_EDIT_ARMOR"
+	commandEnvVar        = "AGE_EDIT_COMMAND"
 	encryptedFileEnvVar  = "AGE_EDIT_ENCRYPTED_FILE"
 	identitiesFileEnvVar = "AGE_EDIT_IDENTITIES_FILE"
 	memlockEnvVar        = "AGE_EDIT_MEMLOCK"
@@ -233,7 +235,7 @@ func loadIdentities(path string) ([]age.Identity, []age.Recipient, error) {
 	return identities, recipients, nil
 }
 
-func edit(idsPath, encPath, tempDirPrefix string, armor bool, editor string, readOnly bool) (string, error) {
+func edit(idsPath, encPath, tempDirPrefix string, armor bool, readOnly bool, command string, arg ...string) (string, error) {
 	exists, err := checkAccess(encPath, readOnly)
 	if err != nil {
 		return "", err
@@ -334,6 +336,10 @@ func defaultArmor() (bool, error) {
 	}
 
 	return b, nil
+}
+
+func defaultCommand() string {
+	return os.Getenv(commandEnvVar)
 }
 
 func defaultEditor() string {
@@ -442,11 +448,17 @@ func cli() int {
 		defaultArmorVal,
 		fmt.Sprintf("write an armored age file (%v)", armorEnvVar),
 	)
+	commandFlag := flag.StringP(
+		"command",
+		"c",
+		defaultCommand(),
+		fmt.Sprintf("command to run (overrides editor, %v)", commandEnvVar),
+	)
 	editorFlag := flag.StringP(
 		"editor",
 		"e",
 		defaultEditor(),
-		fmt.Sprintf("command to use for editing the encrypted file (%v)", strings.Join(editorEnvVars, ", ")),
+		fmt.Sprintf("editor executable to run (%v)", strings.Join(editorEnvVars, ", ")),
 	)
 	readOnly := flag.BoolP(
 		"read-only",
@@ -553,9 +565,24 @@ An identities file and an encrypted file, given in the arguments or the environm
 		}
 	}
 
+	editorCommand := *editorFlag
+	editorArgs := []string{}
+
+	if *commandFlag != "" {
+		args, err := shlex.Split(*commandFlag, true)
+
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error: failed to split command")
+			os.Exit(exitBadUsage)
+		}
+
+		editorCommand = args[0]
+		editorArgs = args[1:]
+	}
+
 	start := int(time.Now().Unix())
 
-	tempDir, err := edit(identitiesFile, encryptedFile, *tempDirPrefix, *armored, *editorFlag, *readOnly)
+	tempDir, err := edit(identitiesFile, encryptedFile, *tempDirPrefix, *armored, *readOnly, editorCommand, editorArgs...)
 	if tempDir != "" {
 		// Remove the "age-edit-..." directory if empty
 		// after removing the temporary file and the random subdirectory.

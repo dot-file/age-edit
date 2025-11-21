@@ -66,8 +66,9 @@ Arguments:
 
 Options:
   -a, --armor             write an armored age file (AGE_EDIT_ARMOR)
-  -e, --editor string     command to use for editing the encrypted file
-(AGE_EDIT_EDITOR, VISUAL, EDITOR, default "vi")
+  -c, --command string    command to run (overrides editor, AGE_EDIT_COMMAND)
+  -e, --editor string     editor executable to run (AGE_EDIT_EDITOR, VISUAL,
+EDITOR, default "vim")
   -M, --no-memlock        disable mlockall(2) that prevents swapping (negated
 AGE_EDIT_MEMLOCK)
   -r, --read-only         make the temporary file read-only and discard all
