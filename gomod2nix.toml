@@ -4,12 +4,18 @@ schema = 3
   [mod."filippo.io/age"]
     version = "v1.2.1"
     hash = "sha256-9ZJdrmqBj43zSvStt0r25wjSfnvitdx3GYtM3urHcaA="
+  [mod."github.com/anmitsu/go-shlex"]
+    version = "v0.0.0-20200514113438-38f4b401e2be"
+    hash = "sha256-L3Ak4X2z7WXq7vMKuiHCOJ29nlpajUQ08Sfb9T0yP54="
   [mod."github.com/carlmjohnson/crockford"]
     version = "v0.23.1"
     hash = "sha256-2Nq4cOjtmEIooJBnc6Pq+QtZspx+Ap4DaxWPK95avFM="
   [mod."github.com/klauspost/cpuid/v2"]
     version = "v2.0.9"
     hash = "sha256-0rHlHzEVaDdkVbRJDhnAJjfJUmAHOYjXN5u7VoCi5uk="
+  [mod."github.com/mitchellh/go-wordwrap"]
+    version = "v1.0.1"
+    hash = "sha256-fiD7kh5037BjA0vW6A2El0XArkK+4S5iTBjJB43BNYo="
   [mod."github.com/spf13/pflag"]
     version = "v1.0.10"
     hash = "sha256-uDPnWjHpSrzXr17KEYEA1yAbizfcsfo5AyztY2tS6ZU="
