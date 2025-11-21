@@ -116,6 +116,15 @@ enable = [
     "zerologlint",
 ]
 
+[[linters.exclusions.rules]]
+path = "script/"
+linters = [
+    "gosec",
+    "mnd",
+    "noctx",
+    "wrapcheck",
+]
+
 [linters.settings.ireturn]
 allow = [
     "anon",

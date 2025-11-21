@@ -57,6 +57,7 @@ An [independent Nix package](https://github.com/dot-file/age-edit) is available 
 
 ## Usage
 
+<!-- BEGIN USAGE -->
 ```none
 Usage: age-edit [options] [[identities] encrypted]
 
@@ -68,13 +69,13 @@ Options:
   -a, --armor             write an armored age file (AGE_EDIT_ARMOR)
   -c, --command string    command to run (overrides editor, AGE_EDIT_COMMAND)
   -e, --editor string     editor executable to run (AGE_EDIT_EDITOR, VISUAL,
-EDITOR, default "vim")
+EDITOR, default "vi")
   -M, --no-memlock        disable mlockall(2) that prevents swapping (negated
 AGE_EDIT_MEMLOCK)
   -r, --read-only         make the temporary file read-only and discard all
 changes (AGE_EDIT_READ_ONLY)
-  -t, --temp-dir string   temporary directory prefix (AGE_EDIT_TEMP_DIR,
-default "/dev/shm/")
+  -t, --temp-dir string   temporary directory prefix (AGE_EDIT_TEMP_DIR, default
+"/dev/shm/")
   -V, --version           report the program version and exit
   -w, --warn int          warn if the editor exits after less than a number of
 seconds (0 to disable, AGE_EDIT_WARN)
@@ -84,6 +85,7 @@ environment variables, are required. Default values are read from environment
 variables with a built-in fallback. Boolean environment variables accept 0, 1,
 true, false, yes, no.
 ```
+<!-- END USAGE -->
 
 ## Using age-edit with pago
 
