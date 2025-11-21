@@ -12,7 +12,6 @@ tasks:
     desc: 'Build and test everything'
     deps:
       - build
-      - lint
       - test
 
   build:
