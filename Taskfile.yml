@@ -17,28 +17,36 @@ tasks:
   build:
     desc: 'Build all components'
     deps:
-      - build-age-edit
-      - build-readme
+      - build:bin
+      - build:readme
 
-  build-age-edit:
-    desc: 'Build the age-edit executable'
+  build:bin:
+    desc: 'Build all binaries'
+    deps:
+      - build:age-edit
+
+  build:age-edit:
+    desc: 'Build the age-edit binary'
+    run: once
     cmds:
-      - cmd: go build -trimpath
+      - go build -trimpath
     sources:
       - '*.go'
     generates:
-      - age-edit
+      - age-edit{{exeExt}}
 
-  build-readme:
+  build:readme:
     desc: 'Update the usage section in "README.md" with current help'
+    run: once
     deps:
-      - build-age-edit
+      - build:age-edit
     cmds:
       - go run ./script/readme ./age-edit --help
     env:
       AGE_EDIT_EDITOR: vi
-    status:
+    sources:
       - main.go
+      - script/readme/main.go
     generates:
       - README.md
 
@@ -50,7 +58,7 @@ tasks:
       - test
 
   clean:
-    desc: 'Clean up executables'
+    desc: 'Clean up binaries'
     cmds:
       - rm -f age-edit{{exeExt}}
 
@@ -62,6 +70,6 @@ tasks:
   test:
     desc: 'Run tests'
     deps:
-      - build-age-edit
+      - build:age-edit
     cmds:
       - go test ./...
