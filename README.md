@@ -87,6 +87,12 @@ true, false, yes, no.
 ```
 <!-- END USAGE -->
 
+The `--editor` option can only specify the editor command to run; it doesn't allow arguments.
+Use the `--command` option to specify a command with arguments.
+
+The command string is split into arguments according to the rules of POSIX shell using [anmitsu/go-shlex](https://github.com/anmitsu/go-shlex).
+For example, `age-edit --command 'foo --bar "baz 5"'` runs `foo --bar 'baz 5' /path/to/temp-file` to edit the temporary file.
+
 ## Using age-edit with pago
 
 You can use age-edit with a private key stored in [pago](https://github.com/dbohdan/pago) or a similar password manager.
@@ -149,6 +155,9 @@ The decrypted contents of the file are stored by default in the directory `/dev/
 You can change this to `/custom/path/age-edit-${username}@${hostname}/abcd0123/`.
 Other programs run by the same user can access the decrypted file contents.
 Note that `/dev/shm/` can be swapped out when swap is enabled.
+
+Temporary files and directories are created with restrictive permissions: 0600 for files and 0700 for directories.
+The read-only option sets the file permissions to 0400.
 
 age-edit doesn't work with multi-document editors.
 
