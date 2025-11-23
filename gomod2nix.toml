@@ -10,6 +10,9 @@ schema = 3
   [mod."github.com/carlmjohnson/crockford"]
     version = "v0.23.1"
     hash = "sha256-2Nq4cOjtmEIooJBnc6Pq+QtZspx+Ap4DaxWPK95avFM="
+  [mod."github.com/gofrs/flock"]
+    version = "v0.12.0"
+    hash = "sha256-2gjGTNxfABicWBw5LkarbW9+CI23rnzKydG6VQUlHgo="
   [mod."github.com/klauspost/cpuid/v2"]
     version = "v2.0.9"
     hash = "sha256-0rHlHzEVaDdkVbRJDhnAJjfJUmAHOYjXN5u7VoCi5uk="
