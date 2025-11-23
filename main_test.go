@@ -10,6 +10,8 @@ import (
 )
 
 func TestCheckAccess(t *testing.T) {
+	t.Parallel()
+
 	// Create a temporary file to test against.
 	tempFile, err := os.CreateTemp("", "test-file")
 	if err != nil {
@@ -39,6 +41,8 @@ func TestCheckAccess(t *testing.T) {
 }
 
 func TestEncryptAndDecryptToFile(t *testing.T) {
+	t.Parallel()
+
 	testData := "Hello, world!\n"
 
 	// Create a temporary file for the input.
@@ -91,6 +95,8 @@ func TestEncryptAndDecryptToFile(t *testing.T) {
 }
 
 func TestGetRoot(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		input    string
 		expected string
@@ -111,6 +117,8 @@ func TestGetRoot(t *testing.T) {
 }
 
 func TestLoadIdentities(t *testing.T) {
+	t.Parallel()
+
 	corruptedKey := "AGE-SECRET-KEY-1XXXXXXXXXX1234567890abcdefghijklmnopqrstuvwxyz"
 	validKey := "AGE-SECRET-KEY-150E3TFLT765WC7X9E2Y6KAN2XA7NE4DN0XVCR4ATTFQK6GSXCGVS3KS7MS"
 
@@ -167,6 +175,7 @@ func TestLoadIdentities(t *testing.T) {
 }
 
 func createBatchFile(t *testing.T, tempDir string) (string, error) {
+	t.Helper()
 	batchFile := filepath.Join(tempDir, "true.cmd")
 	if err := os.WriteFile(batchFile, []byte("@echo off\nexit 0"), 0o700); err != nil {
 		return "", err
@@ -175,6 +184,8 @@ func createBatchFile(t *testing.T, tempDir string) (string, error) {
 }
 
 func TestEdit(t *testing.T) {
+	t.Parallel()
+
 	identity, err := age.GenerateX25519Identity()
 	if err != nil {
 		t.Fatalf("failed to generate identity: %v", err)
@@ -190,12 +201,14 @@ func TestEdit(t *testing.T) {
 
 	tests := []struct {
 		name            string
+		lock            bool
 		readOnly        bool
 		checkFn         func(t *testing.T, tempDir string)
 		expectEditError bool
 	}{
 		{
 			name:     "read-only mode",
+			lock:     false,
 			readOnly: true,
 			checkFn: func(t *testing.T, tempDir string) {
 				files, err := os.ReadDir(tempDir)
@@ -247,11 +260,7 @@ func TestEdit(t *testing.T) {
 			}
 
 			// Create a temporary directory.
-			tempDirPrefix, err := os.MkdirTemp("", "age-edit-test")
-			if err != nil {
-				t.Fatalf("failed to create temp dir for test: %v", err)
-			}
-			defer os.RemoveAll(tempDirPrefix)
+			tempDirPrefix := t.TempDir()
 
 			// Call edit.
 			editor := "true"
@@ -263,7 +272,17 @@ func TestEdit(t *testing.T) {
 				editor = batchFile
 			}
 
-			tempDir, err := edit(idFile.Name(), encFile.Name(), tempDirPrefix, false, tt.readOnly, editor)
+			tempDir, err := edit(config{
+				idsPath:       idFile.Name(),
+				encPath:       encFile.Name(),
+				tempDirPrefix: tempDirPrefix,
+
+				armor:    false,
+				lock:     tt.lock,
+				readOnly: tt.readOnly,
+				command:  editor,
+				args:     []string{},
+			})
 			if (err != nil) != tt.expectEditError {
 				t.Fatalf("edit() error = %v, expectEditError %v", err, tt.expectEditError)
 			}

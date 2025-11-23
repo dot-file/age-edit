@@ -64,17 +64,17 @@ func TestSignalSave(t *testing.T) {
 		t.Fatalf("failed to build age-edit binary: %v", err)
 	}
 
-	testEditPath, err := buildInTempDir("./test/edit", "test-edit")
+	testEditorPath, err := buildInTempDir("./test/signal", "test-editor")
 	if err != nil {
-		t.Fatalf("failed to build ./test/edit binary: %v", err)
+		t.Fatalf("failed to build ./test/signal binary: %v", err)
 	}
 
-	// Run the age-edit binary with test/edit as the editor.
+	// Run the age-edit binary with test/signal as the editor.
 	errChan := make(chan error)
 	go func() {
 		cmd := exec.Command(
 			ageEditPath,
-			"--editor", testEditPath,
+			"--editor", testEditorPath,
 			"--no-memlock",
 			"--temp-dir", tempDir,
 			idFilePath,
