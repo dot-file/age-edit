@@ -9,59 +9,79 @@ tasks:
       - all
 
   all:
-    desc: 'Build and test everything'
+    desc: 'Build and test everything; update docs'
     deps:
       - build
+      - doc
       - test
 
   build:
     desc: 'Build all components'
     deps:
-      - build-age-edit
-      - build-readme
+      - build:bin
 
-  build-age-edit:
-    desc: 'Build the age-edit executable'
+  build:bin:
+    desc: 'Build all binaries'
+    deps:
+      - build:age-edit
+
+  build:age-edit:
+    desc: 'Build the age-edit binary'
+    run: once
     cmds:
-      - cmd: go build -trimpath
+      - go build -trimpath
     sources:
       - '*.go'
     generates:
-      - age-edit
-
-  build-readme:
-    desc: 'Update the usage section in "README.md" with current help'
-    deps:
-      - build-age-edit
-    cmds:
-      - go run ./script/readme ./age-edit --help
-    env:
-      AGE_EDIT_EDITOR: vi
-    status:
-      - main.go
-    generates:
-      - README.md
+      - age-edit{{exeExt}}
 
   check:
-    desc: 'Build, lint, and test everything'
+    desc: 'Build, format, lint, and test everything'
     deps:
       - build
+      - format
       - lint
       - test
 
   clean:
-    desc: 'Clean up executables'
+    desc: 'Clean up binaries'
     cmds:
       - rm -f age-edit{{exeExt}}
 
+  doc:
+    desc: 'Generate documenation'
+    deps:
+      - doc:readme
+
+  doc:readme:
+    desc: 'Update the usage section in "README.md" with current help'
+    run: once
+    deps:
+      - build:age-edit
+    cmds:
+      - go run ./script/readme ./age-edit --help
+    env:
+      AGE_EDIT_EDITOR: vi
+    sources:
+      - main.go
+      - script/readme/main.go
+    generates:
+      - README.md
+
+
+  format:
+    desc: 'Format source code'
+    cmds:
+      - golangci-lint fmt ./...
+
   lint:
-    desc: 'Run golangci-lint'
+    desc: 'Run linters'
     cmds:
       - golangci-lint run
 
   test:
     desc: 'Run tests'
     deps:
-      - build-age-edit
+      - build:age-edit
     cmds:
       - go test ./...

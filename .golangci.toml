@@ -125,6 +125,11 @@ linters = [
     "wrapcheck",
 ]
 
+[linters.settings.gosec]
+excludes = [
+    "G204",  # Subprocess launched with a potential tainted input or cmd arguments
+]
+
 [linters.settings.ireturn]
 allow = [
     "anon",

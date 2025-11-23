@@ -2,30 +2,37 @@ package main
 
 import (
 	"os"
-	"syscall"
 	"time"
 )
 
 func main() {
-	path := os.Args[1]
+	args := os.Args[1:]
+	readOnly := false
 
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if args[0] == "--read-only" {
+		readOnly = true
+		args = args[1:]
+	}
+
+	f, err := os.OpenFile(args[0], os.O_RDONLY, 0)
+	if err != nil {
+		panic(err)
+	}
+	_ = f.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	if readOnly {
+		return
+	}
+
+	f, err = os.OpenFile(args[0], os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		panic(err)
 	}
 	defer f.Close()
 
-	if _, err := f.WriteString("phase1\n"); err != nil {
-		panic(err)
-	}
-
-	if err := syscall.Kill(syscall.Getppid(), syscall.SIGUSR1); err != nil {
-		panic(err)
-	}
-
-	time.Sleep(500 * time.Millisecond)
-
-	if _, err := f.WriteString("phase2\n"); err != nil {
+	if _, err := f.WriteString("edit\n"); err != nil {
 		panic(err)
 	}
 }

@@ -1,9 +1,15 @@
 *.age
 *.asc
+*.exe
 *.gpg
-*.swp
+*.sw*
 *.txt
+
 /.task/
 
 /age-edit
+/edit
 /help
+/signal
+/test/edit/edit
+/test/signal/signal

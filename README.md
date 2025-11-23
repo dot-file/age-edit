@@ -105,6 +105,7 @@ Options:
   -c, --command string    command to run (overrides editor, AGE_EDIT_COMMAND)
   -e, --editor string     editor executable to run (AGE_EDIT_EDITOR, VISUAL,
 EDITOR, default "vi")
+  -L, --no-lock           do not lock encrypted file (negated AGE_EDIT_LOCK)
   -M, --no-memlock        disable mlockall(2) that prevents swapping (negated
 AGE_EDIT_MEMLOCK)
   -r, --read-only         make the temporary file read-only and discard all
@@ -127,6 +128,24 @@ Use the `--command` option to specify a command with arguments.
 
 The command string is split into arguments according to the rules of POSIX shell using [anmitsu/go-shlex](https://github.com/anmitsu/go-shlex).
 For example, `age-edit --command 'foo --bar "baz 5"'` runs `foo --bar 'baz 5' /path/to/temp-file` to edit the temporary file.
+
+## File locking
+
+age-edit supports file locking to prevent concurrent editing of the same encrypted file.
+When file locking is enabled (default), age-edit locks the encrypted file (using [gofrs/flock](https://github.com/gofrs/flock)).
+If another instance of age-edit with locking enabled tries to edit the same file, it will fail with an error message that says the file is locked.
+This can prevent data loss from multiple copies of age-edit editing the same encrypted file simultaneously.
+
+## Saving without exiting
+
+On POSIX systems (BSD, Linux, macOS), you can send the `SIGUSR1` signal to the age-edit process to save changes to the encrypted file without closing the editor.
+This is useful for long editing sessions.
+
+```shell
+pkill -USR1 age-edit
+```
+
+If saving fails, age-edit will ring the [system bell](https://en.wikipedia.org/wiki/Bell_character) and print an error message to standard error.
 
 ## Using age-edit with pago
 
@@ -167,17 +186,6 @@ zstd -7 --long < "$decompressed" > "$1"
 
 rm "$decompressed"
 ```
-
-## Saving without exiting
-
-On POSIX systems (BSD, Linux, macOS), you can send the `SIGUSR1` signal to the age-edit process to save changes to the encrypted file without closing the editor.
-This is useful for long editing sessions.
-
-```shell
-pkill -USR1 age-edit
-```
-
-If saving fails, age-edit will ring the [system bell](https://en.wikipedia.org/wiki/Bell_character) and print an error message to standard error.
 
 ## Security and other considerations
 

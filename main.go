@@ -19,6 +19,7 @@ import (
 	"filippo.io/age/armor"
 	"github.com/anmitsu/go-shlex"
 	"github.com/carlmjohnson/crockford"
+	"github.com/gofrs/flock"
 	"github.com/spf13/pflag"
 	"lukechampine.com/blake3"
 )
@@ -43,17 +44,31 @@ const (
 	commandEnvVar        = "AGE_EDIT_COMMAND"
 	encryptedFileEnvVar  = "AGE_EDIT_ENCRYPTED_FILE"
 	identitiesFileEnvVar = "AGE_EDIT_IDENTITIES_FILE"
+	lockEnvVar           = "AGE_EDIT_LOCK"
 	memlockEnvVar        = "AGE_EDIT_MEMLOCK"
 	readOnlyEnvVar       = "AGE_EDIT_READ_ONLY"
 	tempDirPrefixEnvVar  = "AGE_EDIT_TEMP_DIR"
 	warnEnvVar           = "AGE_EDIT_WARN"
 
-	version = "0.12.0"
+	version = "0.13.0"
 )
 
 var (
 	editorEnvVars = []string{"AGE_EDIT_EDITOR", "VISUAL", "EDITOR"}
 )
+
+type config struct {
+	idsPath       string
+	encPath       string
+	tempDirPrefix string
+
+	armor    bool
+	lock     bool
+	readOnly bool
+
+	command string
+	args    []string
+}
 
 type saveError struct {
 	err      error
@@ -236,13 +251,13 @@ func loadIdentities(path string) ([]age.Identity, []age.Recipient, error) {
 	return identities, recipients, nil
 }
 
-func edit(idsPath, encPath, tempDirPrefix string, armor bool, readOnly bool, command string, arg ...string) (string, error) {
-	exists, err := checkAccess(encPath, readOnly)
+func edit(cfg config) (string, error) {
+	exists, err := checkAccess(cfg.encPath, cfg.readOnly)
 	if err != nil {
 		return "", err
 	}
 
-	identities, recipients, err := loadIdentities(idsPath)
+	identities, recipients, err := loadIdentities(cfg.idsPath)
 	if err != nil {
 		return "", err
 	}
@@ -259,18 +274,36 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, readOnly bool, com
 
 	userDir := fmt.Sprintf("age-edit-%s@%s", currentUser.Username, hostname)
 	subdir := randomID()
-	tempDir := filepath.Join(tempDirPrefix, userDir, subdir)
+	tempDir := filepath.Join(cfg.tempDirPrefix, userDir, subdir)
 
 	err = os.MkdirAll(tempDir, tempDirPerm)
 	if err != nil {
 		return tempDir, err
 	}
 
-	rootname := getRoot(encPath)
+	rootname := getRoot(cfg.encPath)
 	tempFile := filepath.Join(tempDir, filepath.Base(rootname))
 
+	encLock := flock.New(cfg.encPath)
+
+	//nolint:nestif
 	if exists {
-		if err = decryptToFile(encPath, tempFile, identities...); err != nil {
+		if cfg.lock && !cfg.readOnly {
+			locked, err := encLock.TryLock()
+			if err != nil {
+				return tempDir, fmt.Errorf("failed to acquire lock: %w", err)
+			}
+
+			if !locked {
+				return tempDir, errors.New("encrypted file is locked")
+			}
+
+			defer func() {
+				_ = encLock.Unlock()
+			}()
+		}
+
+		if err := decryptToFile(cfg.encPath, tempFile, identities...); err != nil {
 			return tempDir, err
 		}
 	}
@@ -280,8 +313,8 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, readOnly bool, com
 		return tempDir, err
 	}
 
-	if readOnly {
-		if err = os.Chmod(tempFile, fileReadOnlyPerm); err != nil {
+	if cfg.readOnly {
+		if err := os.Chmod(tempFile, fileReadOnlyPerm); err != nil {
 			return tempDir, err
 		}
 	}
@@ -298,7 +331,7 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, readOnly bool, com
 		}
 
 		if !bytes.Equal(beforeSum, currentSum) {
-			if err = encryptToFile(tempFile, encPath, armor, recipients...); err != nil {
+			if err = encryptToFile(tempFile, cfg.encPath, cfg.armor, recipients...); err != nil {
 				return err
 			}
 
@@ -308,15 +341,15 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, readOnly bool, com
 		return nil
 	}
 
-	if !readOnly {
+	if !cfg.readOnly {
 		stop := handleSignals(saveChanges)
 		defer stop()
 	}
 
-	fullArgs := append([]string{}, arg...)
+	fullArgs := append([]string{}, cfg.args...)
 	fullArgs = append(fullArgs, tempFile)
 
-	cmd := exec.CommandContext(context.Background(), command, fullArgs...)
+	cmd := exec.CommandContext(context.Background(), cfg.command, fullArgs...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -325,7 +358,7 @@ func edit(idsPath, encPath, tempDirPrefix string, armor bool, readOnly bool, com
 		return tempDir, err
 	}
 
-	if !readOnly {
+	if !cfg.readOnly {
 		if err := saveChanges(); err != nil {
 			return tempDir, &saveError{err: err, tempFile: tempFile}
 		}
@@ -351,15 +384,30 @@ func parseBool(s string, fallback bool) (bool, error) {
 	}
 }
 
-func defaultArmor() (bool, error) {
-	val := os.Getenv(armorEnvVar)
+func defaultArg(envVar string) (string, string) {
+	value := os.Getenv(envVar)
 
-	b, err := parseBool(val, false)
+	helpDefault := ""
+	if value != "" {
+		helpDefault = fmt.Sprintf(", default %q", value)
+	}
+
+	return value, helpDefault
+}
+
+func defaultBool(envVar string, fallback bool) (bool, error) {
+	val := os.Getenv(envVar)
+
+	b, err := parseBool(val, fallback)
 	if err != nil {
-		return false, fmt.Errorf("invalid boolean value for %s: %q", armorEnvVar, val)
+		return false, fmt.Errorf("invalid boolean value for %s: %q", envVar, val)
 	}
 
 	return b, nil
+}
+
+func defaultArmor() (bool, error) {
+	return defaultBool(armorEnvVar, false)
 }
 
 func defaultCommand() string {
@@ -377,15 +425,16 @@ func defaultEditor() string {
 	return "vi"
 }
 
+func defaultLock() (bool, error) {
+	return defaultBool(lockEnvVar, true)
+}
+
+func defaultMemlock() (bool, error) {
+	return defaultBool(memlockEnvVar, true)
+}
+
 func defaultReadOnly() (bool, error) {
-	val := os.Getenv(readOnlyEnvVar)
-
-	b, err := parseBool(val, false)
-	if err != nil {
-		return false, fmt.Errorf("invalid boolean value for %s: %q", readOnlyEnvVar, val)
-	}
-
-	return b, nil
+	return defaultBool(readOnlyEnvVar, false)
 }
 
 func defaultTempDirPrefix() string {
@@ -411,33 +460,25 @@ func defaultWarn() (int, error) {
 	return i, nil
 }
 
-func defaultMemlock() (bool, error) {
-	val := os.Getenv(memlockEnvVar)
-
-	b, err := parseBool(val, true)
-	if err != nil {
-		return false, fmt.Errorf("invalid boolean value for %s: %q", memlockEnvVar, val)
-	}
-
-	return b, nil
-}
-
-func defaultArg(envVar string) (string, string) {
-	value := os.Getenv(envVar)
-
-	helpDefault := ""
-	if value != "" {
-		helpDefault = fmt.Sprintf(", default %q", value)
-	}
-
-	return value, helpDefault
-}
-
 func cli() int {
-	encryptedFile, encryptedFileHelpDefault := defaultArg(encryptedFileEnvVar)
-	identitiesFile, identitiesFileHelpDefault := defaultArg(identitiesFileEnvVar)
+	encryptedFileDefault, encryptedFileHelpDefault := defaultArg(encryptedFileEnvVar)
+	identitiesFileDefault, identitiesFileHelpDefault := defaultArg(identitiesFileEnvVar)
 
 	defaultArmorVal, err := defaultArmor()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+
+		return exitBadUsage
+	}
+
+	defaultLockVal, err := defaultLock()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+
+		return exitBadUsage
+	}
+
+	defaultMemlockVal, err := defaultMemlock()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 
@@ -458,31 +499,37 @@ func cli() int {
 		return exitBadUsage
 	}
 
-	defaultMemlockVal, err := defaultMemlock()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
-
-		return exitBadUsage
-	}
-
 	flag := pflag.NewFlagSet("age-edit", pflag.ContinueOnError)
+
 	armored := flag.BoolP(
 		"armor",
 		"a",
 		defaultArmorVal,
 		fmt.Sprintf("write an armored age file (%v)", armorEnvVar),
 	)
-	commandFlag := flag.StringP(
+	command := flag.StringP(
 		"command",
 		"c",
 		defaultCommand(),
 		fmt.Sprintf("command to run (overrides editor, %v)", commandEnvVar),
 	)
-	editorFlag := flag.StringP(
+	editor := flag.StringP(
 		"editor",
 		"e",
 		defaultEditor(),
 		fmt.Sprintf("editor executable to run (%v)", strings.Join(editorEnvVars, ", ")),
+	)
+	noLock := flag.BoolP(
+		"no-lock",
+		"L",
+		!defaultLockVal,
+		fmt.Sprintf("do not lock encrypted file (negated %v)", lockEnvVar),
+	)
+	noMemlock := flag.BoolP(
+		"no-memlock",
+		"M",
+		!defaultMemlockVal,
+		fmt.Sprintf("disable mlockall(2) that prevents swapping (negated %v)", memlockEnvVar),
 	)
 	readOnly := flag.BoolP(
 		"read-only",
@@ -508,12 +555,6 @@ func cli() int {
 		defaultWarnVal,
 		fmt.Sprintf("warn if the editor exits after less than a number of seconds (0 to disable, %v)", warnEnvVar),
 	)
-	noMemlock := flag.BoolP(
-		"no-memlock",
-		"M",
-		!defaultMemlockVal,
-		fmt.Sprintf("disable mlockall(2) that prevents swapping (negated %v)", memlockEnvVar),
-	)
 
 	flag.Usage = func() {
 		message := fmt.Sprintf(
@@ -538,7 +579,6 @@ An identities file and an encrypted file, given in the arguments or the environm
 
 		fmt.Fprint(os.Stderr, message)
 	}
-
 	if err := flag.Parse(os.Args[1:]); err != nil {
 		if errors.Is(err, pflag.ErrHelp) {
 			return exitOK
@@ -564,15 +604,28 @@ An identities file and an encrypted file, given in the arguments or the environm
 		return exitBadUsage
 	}
 
-	//nolint:mnd
-	if flag.NArg() == 1 {
-		encryptedFile = flag.Arg(0)
-	} else if flag.NArg() == 2 {
-		identitiesFile = flag.Arg(0)
-		encryptedFile = flag.Arg(1)
+	cfg := config{
+		idsPath:       identitiesFileDefault,
+		encPath:       encryptedFileDefault,
+		tempDirPrefix: *tempDirPrefix,
+
+		armor:    *armored,
+		lock:     !*noLock,
+		readOnly: *readOnly,
+
+		command: *editor,
+		args:    []string{},
 	}
 
-	if identitiesFile == "" || encryptedFile == "" {
+	//nolint:mnd
+	if flag.NArg() == 1 {
+		cfg.encPath = flag.Arg(0)
+	} else if flag.NArg() == 2 {
+		cfg.idsPath = flag.Arg(0)
+		cfg.encPath = flag.Arg(1)
+	}
+
+	if cfg.encPath == "" || cfg.idsPath == "" {
 		fmt.Fprintln(
 			os.Stderr,
 			"Error: need an identities file and an encrypted file",
@@ -589,23 +642,20 @@ An identities file and an encrypted file, given in the arguments or the environm
 		}
 	}
 
-	editorCommand := *editorFlag
-	editorArgs := []string{}
-
-	if *commandFlag != "" {
-		args, err := shlex.Split(*commandFlag, true)
+	if *command != "" {
+		args, err := shlex.Split(*command, true)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error: failed to split command")
 			os.Exit(exitBadUsage)
 		}
 
-		editorCommand = args[0]
-		editorArgs = args[1:]
+		cfg.command = args[0]
+		cfg.args = args[1:]
 	}
 
 	start := int(time.Now().Unix())
 
-	tempDir, err := edit(identitiesFile, encryptedFile, *tempDirPrefix, *armored, *readOnly, editorCommand, editorArgs...)
+	tempDir, err := edit(cfg)
 	if tempDir != "" {
 		// Remove the "age-edit-..." directory if empty
 		// after removing the temporary file and the random subdirectory.
