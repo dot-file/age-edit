@@ -9,16 +9,16 @@ tasks:
       - all
 
   all:
-    desc: 'Build and test everything'
+    desc: 'Build and test everything; update docs'
     deps:
       - build
+      - doc
       - test
 
   build:
     desc: 'Build all components'
     deps:
       - build:bin
-      - build:readme
 
   build:bin:
     desc: 'Build all binaries'
@@ -35,7 +35,25 @@ tasks:
     generates:
       - age-edit{{exeExt}}
 
-  build:readme:
+  check:
+    desc: 'Build, format, lint, and test everything'
+    deps:
+      - build
+      - format
+      - lint
+      - test
+
+  clean:
+    desc: 'Clean up binaries'
+    cmds:
+      - rm -f age-edit{{exeExt}}
+
+  doc:
+    desc: 'Generate documenation'
+    deps:
+      - doc:readme
+
+  doc:readme:
     desc: 'Update the usage section in "README.md" with current help'
     run: once
     deps:
@@ -50,20 +68,14 @@ tasks:
     generates:
       - README.md
 
-  check:
-    desc: 'Build, lint, and test everything'
-    deps:
-      - build
-      - lint
-      - test
 
-  clean:
-    desc: 'Clean up binaries'
+  format:
+    desc: 'Format source code'
     cmds:
-      - rm -f age-edit{{exeExt}}
+      - golangci-lint fmt ./...
 
   lint:
-    desc: 'Run golangci-lint'
+    desc: 'Run linters'
     cmds:
       - golangci-lint run
 
