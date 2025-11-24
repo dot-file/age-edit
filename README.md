@@ -97,13 +97,13 @@ For example, `age-edit --command 'foo --bar "baz 5"'` runs `foo --bar 'baz 5' /p
 ## File locking
 
 age-edit supports file locking to prevent concurrent editing of the same encrypted file.
-When file locking is enabled (default), age-edit locks the encrypted file (using [gofrs/flock](https://github.com/gofrs/flock)).
-If another instance of age-edit with locking enabled tries to edit the same file, it will fail with an error message that says the file is locked.
+When file locking is enabled (the default), age-edit locks the encrypted file using [gofrs/flock](https://github.com/gofrs/flock).
+If another instance of age-edit has locking enabled and tries to edit the same file, it will fail with an error message that says the file is locked.
 This can prevent data loss from multiple copies of age-edit editing the same encrypted file simultaneously.
 
 ## Saving without exiting
 
-On POSIX systems (BSD, Linux, macOS), you can send the `SIGUSR1` signal to the age-edit process to save changes to the encrypted file without closing the editor.
+On POSIX systems (BSD, Linux, macOS), you can send the `SIGUSR1` signal to the age-edit process and save changes to the encrypted file without closing the editor.
 This is useful for long editing sessions.
 
 ```shell
