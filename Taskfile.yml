@@ -18,11 +18,6 @@ tasks:
   build:
     desc: 'Build all components'
     deps:
-      - build:bin
-
-  build:bin:
-    desc: 'Build all binaries'
-    deps:
       - build:age-edit
 
   build:age-edit:
@@ -68,11 +63,10 @@ tasks:
     generates:
       - README.md
 
-
   format:
     desc: 'Format source code'
     cmds:
-      - golangci-lint fmt ./...
+      - golangci-lint fmt
 
   lint:
     desc: 'Run linters'

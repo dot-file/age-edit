@@ -54,7 +54,7 @@ func TestSignalSave(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := encryptToFile(plainFilePath, encFilePath, true, identity.Recipient()); err != nil {
+	if err := encryptToFile(plainFilePath, encFilePath, true, "", []string{}, identity.Recipient()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -97,7 +97,7 @@ func TestSignalSave(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = decryptToFile(encFilePath, decFilePath, identity)
+		err = decryptToFile(encFilePath, decFilePath, "", []string{}, identity)
 		if err == nil {
 			content, err := os.ReadFile(decFilePath)
 			if err != nil {
@@ -128,7 +128,7 @@ func TestSignalSave(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := decryptToFile(encFilePath, decFilePath, identity); err != nil {
+	if err := decryptToFile(encFilePath, decFilePath, "", []string{}, identity); err != nil {
 		t.Fatal(err)
 	}
 

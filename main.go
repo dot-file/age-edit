@@ -42,6 +42,8 @@ const (
 
 	armorEnvVar          = "AGE_EDIT_ARMOR"
 	commandEnvVar        = "AGE_EDIT_COMMAND"
+	decodeEnvVar         = "AGE_EDIT_DECODE"
+	encodeEnvVar         = "AGE_EDIT_ENCODE"
 	encryptedFileEnvVar  = "AGE_EDIT_ENCRYPTED_FILE"
 	identitiesFileEnvVar = "AGE_EDIT_IDENTITIES_FILE"
 	lockEnvVar           = "AGE_EDIT_LOCK"
@@ -50,7 +52,7 @@ const (
 	tempDirPrefixEnvVar  = "AGE_EDIT_TEMP_DIR"
 	warnEnvVar           = "AGE_EDIT_WARN"
 
-	version = "0.13.0"
+	version = "0.14.0"
 )
 
 var (
@@ -68,6 +70,11 @@ type config struct {
 
 	command string
 	args    []string
+
+	decodeCmd  string
+	decodeArgs []string
+	encodeCmd  string
+	encodeArgs []string
 }
 
 type saveError struct {
@@ -79,7 +86,9 @@ func (e *saveError) Error() string {
 	return fmt.Sprintf("encryption failed: %v", e.err)
 }
 
-// Handle both armored and binary age files transparently.
+// wrapDecrypt transparently handles both armored and binary age files
+// by detecting the armor header and wrapping the reader appropriately
+// before decryption.
 func wrapDecrypt(r io.Reader, identities ...age.Identity) (io.Reader, error) {
 	buffer := make([]byte, len(armor.Header))
 
@@ -99,6 +108,8 @@ func wrapDecrypt(r io.Reader, identities ...age.Identity) (io.Reader, error) {
 	return age.Decrypt(r, identities...)
 }
 
+// withFiles opens input and output files and executes the provided action function,
+// ensuring both files are properly closed afterward.
 func withFiles(inputPath, outputPath string, action func(in io.Reader, out io.Writer) error) error {
 	in, err := os.Open(inputPath)
 	if err != nil {
@@ -115,20 +126,41 @@ func withFiles(inputPath, outputPath string, action func(in io.Reader, out io.Wr
 	return action(in, out)
 }
 
-func decryptToFile(inputPath, outputPath string, identities ...age.Identity) error {
+// runFilter executes a command with the given arguments,
+// piping input to stdin and output to stdout.
+// If cmd is empty, it copies input directly to output.
+func runFilter(cmd string, args []string, in io.Reader, out io.Writer) error {
+	if strings.TrimSpace(cmd) == "" {
+		_, err := io.Copy(out, in)
+		return err
+	}
+
+	filterCmd := exec.Command(cmd, args...)
+	filterCmd.Stdin = in
+	filterCmd.Stdout = out
+	filterCmd.Stderr = os.Stderr
+
+	return filterCmd.Run()
+}
+
+// decryptToFile decrypts inputPath to outputPath,
+// optionally applying a decode filter command (e.g., decompressor)
+// to the decrypted contents.
+func decryptToFile(inputPath, outputPath string, decodeCmd string, decodeArgs []string, identities ...age.Identity) error {
 	return withFiles(inputPath, outputPath, func(in io.Reader, out io.Writer) error {
 		d, err := wrapDecrypt(in, identities...)
 		if err != nil {
 			return err
 		}
 
-		_, err = io.Copy(out, d)
-
-		return err
+		return runFilter(decodeCmd, decodeArgs, d, out)
 	})
 }
 
-func encryptToFile(inputPath, outputPath string, armored bool, recipients ...age.Recipient) error {
+// encryptToFile encrypts inputPath to outputPath,
+// optionally applying an encode filter command (e.g., a compressor)
+// before encryption and optionally armoring the output.
+func encryptToFile(inputPath, outputPath string, armored bool, encodeCmd string, encodeArgs []string, recipients ...age.Recipient) error {
 	return withFiles(inputPath, outputPath, func(in io.Reader, out io.Writer) error {
 		w := out
 
@@ -145,12 +177,11 @@ func encryptToFile(inputPath, outputPath string, armored bool, recipients ...age
 		}
 		defer encryptWriter.Close()
 
-		_, err = io.Copy(encryptWriter, in)
-
-		return err
+		return runFilter(encodeCmd, encodeArgs, in, encryptWriter)
 	})
 }
 
+// randomID generates a random 8-character lowercase Crockford-base32-encoded string.
 func randomID() string {
 	buf := make([]byte, 0, randomIDLength)
 	buf = crockford.AppendRandom(crockford.Lower, buf)
@@ -158,15 +189,18 @@ func randomID() string {
 	return string(buf)
 }
 
+// getRoot removes the ".age" suffix from a path if present.
 func getRoot(path string) string {
 	return strings.TrimSuffix(path, ".age")
 }
 
+// checksumFile computes the BLAKE3 hash of a file.
+// If the file does not exist it returns the hash of an empty file.
 func checksumFile(path string) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Return the checksum of an empty file.
+			// Return the hash of an empty file.
 			h := blake3.New(digestSize, nil)
 
 			return h.Sum(nil), nil
@@ -184,6 +218,9 @@ func checksumFile(path string) ([]byte, error) {
 	return h.Sum(nil), nil
 }
 
+// checkAccess verifies that a file exists and is readable,
+// and if not in read-only mode, also writable.
+// It returns true if the file exists, false if it doesn't (and is allowed to be created).
 func checkAccess(path string, readOnly bool) (bool, error) {
 	_, err := os.Stat(path)
 
@@ -216,6 +253,9 @@ func checkAccess(path string, readOnly bool) (bool, error) {
 	return true, nil
 }
 
+// loadIdentities parses an identities file.
+// It returns both the private identities and their corresponding public recipients.
+// Comments and blank lines are ignored.
 func loadIdentities(path string) ([]age.Identity, []age.Recipient, error) {
 	identityData, err := os.ReadFile(path)
 	if err != nil {
@@ -251,6 +291,10 @@ func loadIdentities(path string) ([]age.Identity, []age.Recipient, error) {
 	return identities, recipients, nil
 }
 
+// edit implements the edit workflow:
+// decrypt the file, launch an editor, detect changes, and re-encrypt if modified.
+// It returns the temporary directory path and any error encountered.
+// The caller is responsible for cleaning up the temporary directory.
 func edit(cfg config) (string, error) {
 	exists, err := checkAccess(cfg.encPath, cfg.readOnly)
 	if err != nil {
@@ -303,7 +347,7 @@ func edit(cfg config) (string, error) {
 			}()
 		}
 
-		if err := decryptToFile(cfg.encPath, tempFile, identities...); err != nil {
+		if err := decryptToFile(cfg.encPath, tempFile, cfg.decodeCmd, cfg.decodeArgs, identities...); err != nil {
 			return tempDir, err
 		}
 	}
@@ -331,7 +375,7 @@ func edit(cfg config) (string, error) {
 		}
 
 		if !bytes.Equal(beforeSum, currentSum) {
-			if err = encryptToFile(tempFile, cfg.encPath, cfg.armor, recipients...); err != nil {
+			if err = encryptToFile(tempFile, cfg.encPath, cfg.armor, cfg.encodeCmd, cfg.encodeArgs, recipients...); err != nil {
 				return err
 			}
 
@@ -367,6 +411,10 @@ func edit(cfg config) (string, error) {
 	return tempDir, nil
 }
 
+// parseBool converts a string to a boolean.
+// It accepts "1", "true", "yes" as true
+// and "0", "false", "no" as false.
+// An empty string returns the fallback value.
 func parseBool(s string, fallback bool) (bool, error) {
 	if s == "" {
 		return fallback, nil
@@ -384,6 +432,8 @@ func parseBool(s string, fallback bool) (bool, error) {
 	}
 }
 
+// defaultArg retrieves an environment variable.
+// It returns the value and a help string indicating this value is the default.
 func defaultArg(envVar string) (string, string) {
 	value := os.Getenv(envVar)
 
@@ -395,6 +445,8 @@ func defaultArg(envVar string) (string, string) {
 	return value, helpDefault
 }
 
+// defaultBool retrieves a boolean environment variable, using parseBool to convert it.
+// If the variable is not set, the fallback value is returned.
 func defaultBool(envVar string, fallback bool) (bool, error) {
 	val := os.Getenv(envVar)
 
@@ -412,6 +464,14 @@ func defaultArmor() (bool, error) {
 
 func defaultCommand() string {
 	return os.Getenv(commandEnvVar)
+}
+
+func defaultDecode() string {
+	return os.Getenv(decodeEnvVar)
+}
+
+func defaultEncode() string {
+	return os.Getenv(encodeEnvVar)
 }
 
 func defaultEditor() string {
@@ -460,6 +520,8 @@ func defaultWarn() (int, error) {
 	return i, nil
 }
 
+// cli parses command-line arguments, validates configuration, and invokes the edit function.
+// It returns an appropriate exit code.
 func cli() int {
 	encryptedFileDefault, encryptedFileHelpDefault := defaultArg(encryptedFileEnvVar)
 	identitiesFileDefault, identitiesFileHelpDefault := defaultArg(identitiesFileEnvVar)
@@ -511,13 +573,23 @@ func cli() int {
 		"command",
 		"c",
 		defaultCommand(),
-		fmt.Sprintf("command to run (overrides editor, %v)", commandEnvVar),
+		fmt.Sprintf("editor command (overrides the editor executable, %v)", commandEnvVar),
+	)
+	decode := flag.String(
+		"decode",
+		defaultDecode(),
+		fmt.Sprintf("filter command after decryption, like a decompressor (%v)", decodeEnvVar),
 	)
 	editor := flag.StringP(
 		"editor",
 		"e",
 		defaultEditor(),
-		fmt.Sprintf("editor executable to run (%v)", strings.Join(editorEnvVars, ", ")),
+		fmt.Sprintf("editor executable (%v)", strings.Join(editorEnvVars, ", ")),
+	)
+	encode := flag.String(
+		"encode",
+		defaultEncode(),
+		fmt.Sprintf("filter command before encryption, like a compressor (%v)", encodeEnvVar),
 	)
 	noLock := flag.BoolP(
 		"no-lock",
@@ -651,6 +723,28 @@ An identities file and an encrypted file, given in the arguments or the environm
 
 		cfg.command = args[0]
 		cfg.args = args[1:]
+	}
+
+	if *decode != "" {
+		args, err := shlex.Split(*decode, true)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error: failed to split decode command")
+			os.Exit(exitBadUsage)
+		}
+
+		cfg.decodeCmd = args[0]
+		cfg.decodeArgs = args[1:]
+	}
+
+	if *encode != "" {
+		args, err := shlex.Split(*encode, true)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error: failed to split encode command")
+			os.Exit(exitBadUsage)
+		}
+
+		cfg.encodeCmd = args[0]
+		cfg.encodeArgs = args[1:]
 	}
 
 	start := int(time.Now().Unix())
