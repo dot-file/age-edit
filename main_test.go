@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"filippo.io/age"
 )
@@ -263,14 +264,15 @@ func TestEdit(t *testing.T) {
 		name            string
 		lock            bool
 		readOnly        bool
-		checkFn         func(t *testing.T, tempDir string)
+		force           bool
+		checkFn         func(t *testing.T, tempDir string, encFilePath string, initialModTime time.Time)
 		expectEditError bool
 	}{
 		{
 			name:     "read-only mode",
 			lock:     false,
 			readOnly: true,
-			checkFn: func(t *testing.T, tempDir string) {
+			checkFn: func(t *testing.T, tempDir string, encFilePath string, initialModTime time.Time) {
 				files, err := os.ReadDir(tempDir)
 				if err != nil {
 					t.Fatalf("could not read temp dir: %v", err)
@@ -289,6 +291,22 @@ func TestEdit(t *testing.T) {
 				refPerm := os.FileMode(0o400)
 				if perm != refPerm && !(runtime.GOOS == "windows" && perm&0o700 == refPerm) {
 					t.Errorf("expected temp file permissions to be %o, got %o", refPerm, perm)
+				}
+			},
+			expectEditError: false,
+		},
+		{
+			name:     "force re-encryption",
+			lock:     false,
+			readOnly: false,
+			force:    true,
+			checkFn: func(t *testing.T, tempDir string, encFilePath string, initialModTime time.Time) {
+				info, err := os.Stat(encFilePath)
+				if err != nil {
+					t.Fatalf("failed to stat encrypted file: %v", err)
+				}
+				if !info.ModTime().After(initialModTime) {
+					t.Errorf("expected encrypted file modification time to change, but it did not. Initial: %v, Current: %v", initialModTime, info.ModTime())
 				}
 			},
 			expectEditError: false,
@@ -319,6 +337,13 @@ func TestEdit(t *testing.T) {
 				t.Fatalf("failed to encrypt file for test: %v", err)
 			}
 
+			// Get the initial modification time of the encrypted file.
+			initialEncFileInfo, err := os.Stat(encFile.Name())
+			if err != nil {
+				t.Fatalf("failed to stat encrypted file: %v", err)
+			}
+			initialModTime := initialEncFileInfo.ModTime()
+
 			// Create a temporary directory.
 			tempDirPrefix := t.TempDir()
 
@@ -340,6 +365,7 @@ func TestEdit(t *testing.T) {
 				armor:    false,
 				lock:     tt.lock,
 				readOnly: tt.readOnly,
+				force:    tt.force,
 				command:  editor,
 				args:     []string{},
 			})
@@ -351,7 +377,7 @@ func TestEdit(t *testing.T) {
 			}
 
 			if tt.checkFn != nil {
-				tt.checkFn(t, tempDir)
+				tt.checkFn(t, tempDir, encFile.Name(), initialModTime)
 			}
 		})
 	}
