@@ -99,10 +99,15 @@ func TestEncryptAndDecryptToFile(t *testing.T) {
 func TestEncryptAndDecryptToFileWithGzip(t *testing.T) {
 	t.Parallel()
 
-	// Check if gzip is available.
-	_, err := exec.LookPath("gzip")
-	if err != nil {
-		t.Skip("gzip not found, skipping test")
+	// Build the test gzip binary.
+	tempDir := t.TempDir()
+	gzipPath := filepath.Join(tempDir, "gzip")
+	if runtime.GOOS == "windows" {
+		gzipPath += ".exe"
+	}
+	cmd := exec.Command("go", "build", "-o", gzipPath, "./test/gzip")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("failed to build test/gzip binary: %v", err)
 	}
 
 	testData := "Hello, world!\n"
@@ -137,13 +142,13 @@ func TestEncryptAndDecryptToFileWithGzip(t *testing.T) {
 	recipient := identity.Recipient()
 
 	// Test encryption with gzip compression.
-	err = encryptToFile(inputFile.Name(), encryptedFile.Name(), true, "gzip", []string{}, recipient)
+	err = encryptToFile(inputFile.Name(), encryptedFile.Name(), true, gzipPath, []string{}, recipient)
 	if err != nil {
 		t.Errorf("encryptToFile() failed: %v", err)
 	}
 
 	// Test decryption with gzip decompression.
-	err = decryptToFile(encryptedFile.Name(), decryptedFile.Name(), "gzip", []string{"-d"}, identity)
+	err = decryptToFile(encryptedFile.Name(), decryptedFile.Name(), gzipPath, []string{"-d"}, identity)
 	if err != nil {
 		t.Errorf("decryptToFile() failed: %v", err)
 	}
