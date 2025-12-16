@@ -114,6 +114,8 @@ AGE_EDIT_COMMAND)
 default "vi")
       --encode string     filter command before encryption, like a compressor
 (AGE_EDIT_ENCODE)
+  -f, --force             force re-encryption even if the file hasn't changed
+(AGE_EDIT_FORCE)
   -L, --no-lock           do not lock encrypted file (negated AGE_EDIT_LOCK)
   -M, --no-memlock        disable mlockall(2) that prevents swapping (negated
 AGE_EDIT_MEMLOCK)
@@ -195,7 +197,20 @@ To compress a previously uncompressed file:
 age-edit --encode 'zstd -7 --long' ids.txt secret.txt.age
 ```
 
-Note that compression will only be applied if the temporary file changes.
+Note that unless you use the `--force` option, compression will only be applied if the temporary file changes.
+
+## Forcing re-encryption
+
+The `-f`/`--force` option forces re-encryption of the file even if its contents haven't changed.
+This is useful when you want to apply an encoding like compression to a previously unencoded file or to re-encrypt with new identities (as long as at least one can decrypt the file).
+
+For example, to apply Zstandard compression to a file that was previously encrypted without compression:
+
+```shell
+age-edit --editor cat --encode zstd --force ids.txt secret.txt.age
+```
+
+Without the `--force` option, the encoding would not be applied.
 
 ## Security and other considerations
 

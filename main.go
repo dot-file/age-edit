@@ -45,6 +45,7 @@ const (
 	decodeEnvVar         = "AGE_EDIT_DECODE"
 	encodeEnvVar         = "AGE_EDIT_ENCODE"
 	encryptedFileEnvVar  = "AGE_EDIT_ENCRYPTED_FILE"
+	forceEnvVar          = "AGE_EDIT_FORCE"
 	identitiesFileEnvVar = "AGE_EDIT_IDENTITIES_FILE"
 	lockEnvVar           = "AGE_EDIT_LOCK"
 	memlockEnvVar        = "AGE_EDIT_MEMLOCK"
@@ -52,7 +53,7 @@ const (
 	tempDirPrefixEnvVar  = "AGE_EDIT_TEMP_DIR"
 	warnEnvVar           = "AGE_EDIT_WARN"
 
-	version = "0.14.0"
+	version = "0.15.0"
 )
 
 var (
@@ -65,6 +66,7 @@ type config struct {
 	tempDirPrefix string
 
 	armor    bool
+	force    bool
 	lock     bool
 	readOnly bool
 
@@ -374,7 +376,7 @@ func edit(cfg config) (string, error) {
 			return err
 		}
 
-		if !bytes.Equal(beforeSum, currentSum) {
+		if cfg.force || !bytes.Equal(beforeSum, currentSum) {
 			if err = encryptToFile(tempFile, cfg.encPath, cfg.armor, cfg.encodeCmd, cfg.encodeArgs, recipients...); err != nil {
 				return err
 			}
@@ -485,6 +487,10 @@ func defaultEditor() string {
 	return "vi"
 }
 
+func defaultForce() (bool, error) {
+	return defaultBool(forceEnvVar, false)
+}
+
 func defaultLock() (bool, error) {
 	return defaultBool(lockEnvVar, true)
 }
@@ -527,6 +533,13 @@ func cli() int {
 	identitiesFileDefault, identitiesFileHelpDefault := defaultArg(identitiesFileEnvVar)
 
 	defaultArmorVal, err := defaultArmor()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+
+		return exitBadUsage
+	}
+
+	defaultForceVal, err := defaultForce()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 
@@ -590,6 +603,12 @@ func cli() int {
 		"encode",
 		defaultEncode(),
 		fmt.Sprintf("filter command before encryption, like a compressor (%v)", encodeEnvVar),
+	)
+	force := flag.BoolP(
+		"force",
+		"f",
+		defaultForceVal,
+		fmt.Sprintf("force re-encryption even if the file hasn't changed (%v)", forceEnvVar),
 	)
 	noLock := flag.BoolP(
 		"no-lock",
@@ -682,6 +701,7 @@ An identities file and an encrypted file, given in the arguments or the environm
 		tempDirPrefix: *tempDirPrefix,
 
 		armor:    *armored,
+		force:    *force,
 		lock:     !*noLock,
 		readOnly: *readOnly,
 

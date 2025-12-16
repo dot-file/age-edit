@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"filippo.io/age"
 )
@@ -98,10 +99,15 @@ func TestEncryptAndDecryptToFile(t *testing.T) {
 func TestEncryptAndDecryptToFileWithGzip(t *testing.T) {
 	t.Parallel()
 
-	// Check if gzip is available.
-	_, err := exec.LookPath("gzip")
-	if err != nil {
-		t.Skip("gzip not found, skipping test")
+	// Build the test gzip binary.
+	tempDir := t.TempDir()
+	gzipPath := filepath.Join(tempDir, "gzip")
+	if runtime.GOOS == "windows" {
+		gzipPath += ".exe"
+	}
+	cmd := exec.Command("go", "build", "-o", gzipPath, "./test/gzip")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("failed to build test/gzip binary: %v", err)
 	}
 
 	testData := "Hello, world!\n"
@@ -136,13 +142,13 @@ func TestEncryptAndDecryptToFileWithGzip(t *testing.T) {
 	recipient := identity.Recipient()
 
 	// Test encryption with gzip compression.
-	err = encryptToFile(inputFile.Name(), encryptedFile.Name(), true, "gzip", []string{}, recipient)
+	err = encryptToFile(inputFile.Name(), encryptedFile.Name(), true, gzipPath, []string{}, recipient)
 	if err != nil {
 		t.Errorf("encryptToFile() failed: %v", err)
 	}
 
 	// Test decryption with gzip decompression.
-	err = decryptToFile(encryptedFile.Name(), decryptedFile.Name(), "gzip", []string{"-d"}, identity)
+	err = decryptToFile(encryptedFile.Name(), decryptedFile.Name(), gzipPath, []string{"-d"}, identity)
 	if err != nil {
 		t.Errorf("decryptToFile() failed: %v", err)
 	}
@@ -263,14 +269,15 @@ func TestEdit(t *testing.T) {
 		name            string
 		lock            bool
 		readOnly        bool
-		checkFn         func(t *testing.T, tempDir string)
+		force           bool
+		checkFn         func(t *testing.T, tempDir string, encFilePath string, initialModTime time.Time)
 		expectEditError bool
 	}{
 		{
 			name:     "read-only mode",
 			lock:     false,
 			readOnly: true,
-			checkFn: func(t *testing.T, tempDir string) {
+			checkFn: func(t *testing.T, tempDir string, encFilePath string, initialModTime time.Time) {
 				files, err := os.ReadDir(tempDir)
 				if err != nil {
 					t.Fatalf("could not read temp dir: %v", err)
@@ -289,6 +296,22 @@ func TestEdit(t *testing.T) {
 				refPerm := os.FileMode(0o400)
 				if perm != refPerm && !(runtime.GOOS == "windows" && perm&0o700 == refPerm) {
 					t.Errorf("expected temp file permissions to be %o, got %o", refPerm, perm)
+				}
+			},
+			expectEditError: false,
+		},
+		{
+			name:     "force re-encryption",
+			lock:     false,
+			readOnly: false,
+			force:    true,
+			checkFn: func(t *testing.T, tempDir string, encFilePath string, initialModTime time.Time) {
+				info, err := os.Stat(encFilePath)
+				if err != nil {
+					t.Fatalf("failed to stat encrypted file: %v", err)
+				}
+				if !info.ModTime().After(initialModTime) {
+					t.Errorf("expected encrypted file modification time to change, but it did not. Initial: %v, Current: %v", initialModTime, info.ModTime())
 				}
 			},
 			expectEditError: false,
@@ -319,6 +342,13 @@ func TestEdit(t *testing.T) {
 				t.Fatalf("failed to encrypt file for test: %v", err)
 			}
 
+			// Get the initial modification time of the encrypted file.
+			initialEncFileInfo, err := os.Stat(encFile.Name())
+			if err != nil {
+				t.Fatalf("failed to stat encrypted file: %v", err)
+			}
+			initialModTime := initialEncFileInfo.ModTime()
+
 			// Create a temporary directory.
 			tempDirPrefix := t.TempDir()
 
@@ -340,6 +370,7 @@ func TestEdit(t *testing.T) {
 				armor:    false,
 				lock:     tt.lock,
 				readOnly: tt.readOnly,
+				force:    tt.force,
 				command:  editor,
 				args:     []string{},
 			})
@@ -351,7 +382,7 @@ func TestEdit(t *testing.T) {
 			}
 
 			if tt.checkFn != nil {
-				tt.checkFn(t, tempDir)
+				tt.checkFn(t, tempDir, encFile.Name(), initialModTime)
 			}
 		})
 	}
