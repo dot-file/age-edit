@@ -1,22 +1,26 @@
 # age-edit
 
 age-edit is an editor wrapper for files encrypted with [age](https://github.com/FiloSottile/age).
+
 age-edit is designed primarily for Linux and uses `/dev/shm/` by default.
 However, it supports and is automatically tested on FreeBSD, macOS, NetBSD, OpenBSD, and Windows.
-On those systems, it is up to the user to choose a temporary directory prefix.
+On those systems, it is up to the user to choose where to create the temporary directory.
 
 ## How age-edit works
 
-When you run age-edit with an identities (private-keys) file and an encrypted file, it performs the following steps:
+When you run age-edit with an identities (private keys) file and an encrypted file, it performs the following steps:
 
-1. Decrypts the contents of the age-encrypted file to a temporary file using one of the identities (private keys).
-2. Opens an editor on the temporary file.
+1. Decrypt the contents of the age-encrypted file to a temporary file using one of the identities (private keys).
+   Optionally, decode after decryption by passing the data through a user-supplied command, like a decompressor.
+2. Launch an editor on the temporary file.
    (The default editor is determined by the environment variables `AGE_EDIT_EDITOR`, [`VISUAL`, and `EDITOR`](https://unix.stackexchange.com/questions/4859/visual-vs-editor-what-s-the-difference) with `vi` as a fallback, but it can be any editor, e.g., LibreOffice.)
-3. Waits for the editor to exit.
-4. Checks if the temporary file has been modified by comparing its checksum ([BLAKE3](https://en.wikipedia.org/wiki/BLAKE3)) before and after editing.
-   If it has, age-edit encrypts the temporary file with public keys derived from the private keys.
-   The encrypted file can be optionally "armored": stored as ASCII text in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format.
-5. Finally, deletes the temporary file.
+3. Wait for the editor to exit.
+4. Check if the temporary file has been modified by comparing its checksum before and after editing.
+   If the file has been modified, proceed, else skip to the next step.
+   Encrypt the contents of the temporary file to the encrypted file using public keys derived from the private keys.
+   Optionally, encode before encryption by passing the data through a user-supplied command, like a compressor.
+   The encrypted file can be "armored": stored as ASCII text in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format.
+5. Finally, delete the temporary file.
 
 In other words, age-edit implements
 [a](https://wiki.tcl-lang.org/39218)
@@ -67,9 +71,14 @@ Arguments:
 
 Options:
   -a, --armor             write an armored age file (AGE_EDIT_ARMOR)
-  -c, --command string    command to run (overrides editor, AGE_EDIT_COMMAND)
-  -e, --editor string     editor executable to run (AGE_EDIT_EDITOR, VISUAL,
-EDITOR, default "vi")
+  -c, --command string    editor command (overrides the editor executable,
+AGE_EDIT_COMMAND)
+      --decode string     filter command after decryption, like a decompressor
+(AGE_EDIT_DECODE)
+  -e, --editor string     editor executable (AGE_EDIT_EDITOR, VISUAL, EDITOR,
+default "vi")
+      --encode string     filter command before encryption, like a compressor
+(AGE_EDIT_ENCODE)
   -L, --no-lock           do not lock encrypted file (negated AGE_EDIT_LOCK)
   -M, --no-memlock        disable mlockall(2) that prevents swapping (negated
 AGE_EDIT_MEMLOCK)
@@ -132,29 +141,31 @@ age-edit -a (pago show secret.key | psub --fifo) secret.txt
 
 ## Editing compressed files
 
-With a shell script like this, you can edit compressed files using age-edit.
-Give age-edit the path to the shell script as `--editor`.
+You can use the `--decode` and `--encode` options to apply transformations to the file contents.
+
+Like `--command`, `--decode` and `--encode` are split into arguments according to the rules of POSIX shell.
+
+The `--decode` option specifies a command to run after decryption to decode or decompress the file.
+The `--encode` option specifies a command to run before encryption to encode or compress the file.
+
+For example, to use [Zstandard](https://en.wikipedia.org/wiki/Zstd) compression:
 
 ```shell
-#! /bin/sh
-set -eu
-
-cd "$(dirname "$(realpath "$1")")"
-decompressed=$(dirname "$1")/dc-$(basename "$1")
-
-# Decompress if not empty.
-if [ -s "$1" ]; then
-    zstd -d < "$1" > "$decompressed"
-fi
-"${VISUAL:-${EDITOR:-vi}}" "$decompressed"
-zstd -7 --long < "$decompressed" > "$1"
-
-rm "$decompressed"
+age-edit --decode 'zstd -d' --encode 'zstd -7 --long' id.txt secret.txt.zst.age
 ```
+
+To compress a previously uncompressed file:
+
+```shell
+# No `--decode` option.
+age-edit --encode 'zstd -7 --long' ids.txt secret.txt.age
+```
+
+Note that compression will only be applied if the temporary file changes.
 
 ## Security and other considerations
 
-The age identities (private keys) from the keyfile are kept in memory while the encrypted file is being edited.
+The age identities (private keys) from the identities file are kept in memory while the encrypted file is being edited.
 On POSIX systems, the program locks its memory pages using [`mlockall`](https://pubs.opengroup.org/onlinepubs/9799919799/functions/mlockall.html) to prevent being swapped to disk.
 The process memory may be saved in unencrypted swap if the system is suspended to disk.
 No attempt to prevent the swapping of the process is made on non-POSIX systems like Windows.
@@ -166,6 +177,8 @@ Note that `/dev/shm/` can be swapped out when swap is enabled.
 
 Temporary files and directories are created with restrictive permissions: 0600 for files and 0700 for directories.
 The read-only option sets the file permissions to 0400.
+
+[BLAKE3](https://en.wikipedia.org/wiki/BLAKE3) is used to checksum files.
 
 age-edit doesn't work with multi-document editors.
 

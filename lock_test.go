@@ -81,7 +81,7 @@ func TestFileLocking(t *testing.T) {
 			}
 
 			encFilePath := filepath.Join(tempDir, "encrypted.age")
-			if err := encryptToFile(plainFilePath, encFilePath, false, identity.Recipient()); err != nil {
+			if err := encryptToFile(plainFilePath, encFilePath, false, "", []string{}, identity.Recipient()); err != nil {
 				t.Fatal(err)
 			}
 

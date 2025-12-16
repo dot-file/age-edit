@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -76,13 +77,72 @@ func TestEncryptAndDecryptToFile(t *testing.T) {
 	recipient := identity.Recipient()
 
 	// Test encryption.
-	err = encryptToFile(inputFile.Name(), encryptedFile.Name(), true, recipient)
+	err = encryptToFile(inputFile.Name(), encryptedFile.Name(), true, "", []string{}, recipient)
 	if err != nil {
 		t.Errorf("encryptToFile() failed: %v", err)
 	}
 
 	// Test decryption.
-	err = decryptToFile(encryptedFile.Name(), decryptedFile.Name(), identity)
+	err = decryptToFile(encryptedFile.Name(), decryptedFile.Name(), "", []string{}, identity)
+	if err != nil {
+		t.Errorf("decryptToFile() failed: %v", err)
+	}
+
+	// Compare decrypted content with the original.
+	decryptedContent, _ := os.ReadFile(decryptedFile.Name())
+	if string(decryptedContent) != testData {
+		t.Errorf("Decrypted content mismatch: got %q, but expected %q", decryptedContent, testData)
+	}
+}
+
+func TestEncryptAndDecryptToFileWithGzip(t *testing.T) {
+	t.Parallel()
+
+	// Check if gzip is available.
+	_, err := exec.LookPath("gzip")
+	if err != nil {
+		t.Skip("gzip not found, skipping test")
+	}
+
+	testData := "Hello, world!\n"
+
+	inputFile, err := os.CreateTemp("", "input")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(inputFile.Name())
+	_, _ = inputFile.WriteString(testData)
+	inputFile.Close()
+
+	// Create a temporary file for the encrypted and decrypted the output.
+	encryptedFile, err := os.CreateTemp("", "encrypted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(encryptedFile.Name())
+
+	decryptedFile, err := os.CreateTemp("", "decrypted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(decryptedFile.Name())
+
+	// Generate an age key pair for testing.
+	identity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recipient := identity.Recipient()
+
+	// Test encryption with gzip compression.
+	err = encryptToFile(inputFile.Name(), encryptedFile.Name(), true, "gzip", []string{}, recipient)
+	if err != nil {
+		t.Errorf("encryptToFile() failed: %v", err)
+	}
+
+	// Test decryption with gzip decompression.
+	err = decryptToFile(encryptedFile.Name(), decryptedFile.Name(), "gzip", []string{"-d"}, identity)
 	if err != nil {
 		t.Errorf("decryptToFile() failed: %v", err)
 	}
@@ -255,7 +315,7 @@ func TestEdit(t *testing.T) {
 			}
 			defer os.Remove(encFile.Name())
 
-			if err := encryptToFile(plainFile.Name(), encFile.Name(), false, identity.Recipient()); err != nil {
+			if err := encryptToFile(plainFile.Name(), encFile.Name(), false, "", []string{}, identity.Recipient()); err != nil {
 				t.Fatalf("failed to encrypt file for test: %v", err)
 			}
 
