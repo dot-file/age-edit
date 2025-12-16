@@ -143,10 +143,9 @@ age-edit -a (pago show secret.key | psub --fifo) secret.txt
 
 You can use the `--decode` and `--encode` options to apply transformations to the file contents.
 
-Like `--command`, `--decode` and `--encode` are split into arguments according to the rules of POSIX shell.
-
 The `--decode` option specifies a command to run after decryption to decode or decompress the file.
 The `--encode` option specifies a command to run before encryption to encode or compress the file.
+Like `--command`, `--decode` and `--encode` are split into arguments according to the rules of POSIX shell.
 
 For example, to use [Zstandard](https://en.wikipedia.org/wiki/Zstd) compression:
 
