@@ -134,10 +134,11 @@ func withFiles(inputPath, outputPath string, action func(in io.Reader, out io.Wr
 func runFilter(cmd string, args []string, in io.Reader, out io.Writer) error {
 	if strings.TrimSpace(cmd) == "" {
 		_, err := io.Copy(out, in)
+
 		return err
 	}
 
-	filterCmd := exec.Command(cmd, args...)
+	filterCmd := exec.CommandContext(context.Background(), cmd, args...)
 	filterCmd.Stdin = in
 	filterCmd.Stdout = out
 	filterCmd.Stderr = os.Stderr
@@ -707,6 +708,11 @@ An identities file and an encrypted file, given in the arguments or the environm
 
 		command: *editor,
 		args:    []string{},
+
+		decodeCmd:  "",
+		decodeArgs: []string{},
+		encodeCmd:  "",
+		encodeArgs: []string{},
 	}
 
 	//nolint:mnd

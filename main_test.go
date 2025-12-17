@@ -240,17 +240,25 @@ func TestLoadIdentities(t *testing.T) {
 	}
 }
 
-func createBatchFile(t *testing.T, tempDir string) (string, error) {
-	t.Helper()
-	batchFile := filepath.Join(tempDir, "true.cmd")
-	if err := os.WriteFile(batchFile, []byte("@echo off\nexit 0"), 0o700); err != nil {
-		return "", err
-	}
-	return batchFile, nil
-}
-
 func TestEdit(t *testing.T) {
 	t.Parallel()
+
+	tempDir := t.TempDir()
+
+	buildInTempDir := func(pkg, output string) (string, error) {
+		if runtime.GOOS == "windows" {
+			output += ".exe"
+		}
+
+		path := filepath.Join(tempDir, output)
+		cmd := exec.Command("go", "build", "-o", path, pkg)
+		return path, cmd.Run()
+	}
+
+	testEditorPath, err := buildInTempDir("./test/edit", "test-editor")
+	if err != nil {
+		t.Fatalf("failed to build test/edit binary: %v", err)
+	}
 
 	identity, err := age.GenerateX25519Identity()
 	if err != nil {
@@ -353,13 +361,9 @@ func TestEdit(t *testing.T) {
 			tempDirPrefix := t.TempDir()
 
 			// Call edit.
-			editor := "true"
-			if runtime.GOOS == "windows" {
-				batchFile, err := createBatchFile(t, tempDirPrefix)
-				if err != nil {
-					t.Fatalf("failed to create batch file: %v", err)
-				}
-				editor = batchFile
+			editArgs := []string{}
+			if tt.readOnly {
+				editArgs = append(editArgs, "--read-only")
 			}
 
 			tempDir, err := edit(config{
@@ -371,8 +375,8 @@ func TestEdit(t *testing.T) {
 				lock:     tt.lock,
 				readOnly: tt.readOnly,
 				force:    tt.force,
-				command:  editor,
-				args:     []string{},
+				command:  testEditorPath,
+				args:     editArgs,
 			})
 			if (err != nil) != tt.expectEditError {
 				t.Fatalf("edit() error = %v, expectEditError %v", err, tt.expectEditError)
