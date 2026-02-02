@@ -73,7 +73,7 @@
     )
     // {
       overlays.default = final: prev: {
-        inherit (self.packages.${final.system}) age-edit;
+        inherit (self.packages.${final.stdenv.hostPlatform.system}) age-edit;
       };
     };
 }
