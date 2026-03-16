@@ -34,13 +34,14 @@ const (
 
 	cliMaxArgs = 2
 
-	defaultTempDirPrefixLinux = "/dev/shm/"
+	defaultTempDirBaseLinux = "/dev/shm/"
 
 	filePerm         = 0o600
 	fileReadOnlyPerm = 0o400
 	tempDirPerm      = 0o700
 
 	armorEnvVar          = "AGE_EDIT_ARMOR"
+	autosaveEnvVar       = "AGE_EDIT_AUTOSAVE"
 	commandEnvVar        = "AGE_EDIT_COMMAND"
 	decodeEnvVar         = "AGE_EDIT_DECODE"
 	encodeEnvVar         = "AGE_EDIT_ENCODE"
@@ -50,10 +51,10 @@ const (
 	lockEnvVar           = "AGE_EDIT_LOCK"
 	memlockEnvVar        = "AGE_EDIT_MEMLOCK"
 	readOnlyEnvVar       = "AGE_EDIT_READ_ONLY"
-	tempDirPrefixEnvVar  = "AGE_EDIT_TEMP_DIR"
+	tempDirBaseEnvVar    = "AGE_EDIT_TEMP_DIR"
 	warnEnvVar           = "AGE_EDIT_WARN"
 
-	version = "0.15.0"
+	version = "0.16.0"
 )
 
 var (
@@ -61,9 +62,10 @@ var (
 )
 
 type config struct {
-	idsPath       string
-	encPath       string
-	tempDirPrefix string
+	autosaveInterval time.Duration
+	idsPath          string
+	encPath          string
+	tempDirBase      string
 
 	armor    bool
 	force    bool
@@ -321,7 +323,7 @@ func edit(cfg config) (string, error) {
 
 	userDir := fmt.Sprintf("age-edit-%s@%s", currentUser.Username, hostname)
 	subdir := randomID()
-	tempDir := filepath.Join(cfg.tempDirPrefix, userDir, subdir)
+	tempDir := filepath.Join(cfg.tempDirBase, userDir, subdir)
 
 	err = os.MkdirAll(tempDir, tempDirPerm)
 	if err != nil {
@@ -391,6 +393,9 @@ func edit(cfg config) (string, error) {
 	if !cfg.readOnly {
 		stop := handleSignals(saveChanges)
 		defer stop()
+
+		stopAutosave := handleAutosave(cfg.autosaveInterval, saveChanges)
+		defer stopAutosave()
 	}
 
 	fullArgs := append([]string{}, cfg.args...)
@@ -465,6 +470,20 @@ func defaultArmor() (bool, error) {
 	return defaultBool(armorEnvVar, false)
 }
 
+func defaultAutosave() (time.Duration, error) {
+	val := os.Getenv(autosaveEnvVar)
+	if val == "" {
+		return 0, nil
+	}
+
+	d, err := time.ParseDuration(val)
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration value for %s: %q", autosaveEnvVar, val)
+	}
+
+	return d, nil
+}
+
 func defaultCommand() string {
 	return os.Getenv(commandEnvVar)
 }
@@ -504,27 +523,17 @@ func defaultReadOnly() (bool, error) {
 	return defaultBool(readOnlyEnvVar, false)
 }
 
-func defaultTempDirPrefix() string {
-	prefix := os.Getenv(tempDirPrefixEnvVar)
-	if prefix == "" {
-		prefix = defaultTempDirPrefixLinux
+func defaultTempDirBase() string {
+	base := os.Getenv(tempDirBaseEnvVar)
+	if base == "" {
+		base = defaultTempDirBaseLinux
 	}
 
-	return prefix
+	return base
 }
 
-func defaultWarn() (int, error) {
-	val := os.Getenv(warnEnvVar)
-	if val == "" {
-		return 0, nil
-	}
-
-	i, err := strconv.Atoi(val)
-	if err != nil {
-		return 0, fmt.Errorf("invalid integer value for %s: %q", warnEnvVar, val)
-	}
-
-	return i, nil
+func defaultWarn() string {
+	return os.Getenv(warnEnvVar)
 }
 
 // cli parses command-line arguments, validates configuration, and invokes the edit function.
@@ -534,6 +543,13 @@ func cli() int {
 	identitiesFileDefault, identitiesFileHelpDefault := defaultArg(identitiesFileEnvVar)
 
 	defaultArmorVal, err := defaultArmor()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+
+		return exitBadUsage
+	}
+
+	defaultAutosaveVal, err := defaultAutosave()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 
@@ -568,12 +584,7 @@ func cli() int {
 		return exitBadUsage
 	}
 
-	defaultWarnVal, err := defaultWarn()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
-
-		return exitBadUsage
-	}
+	defaultWarnVal := defaultWarn()
 
 	flag := pflag.NewFlagSet("age-edit", pflag.ContinueOnError)
 
@@ -583,11 +594,17 @@ func cli() int {
 		defaultArmorVal,
 		fmt.Sprintf("write an armored age file (%v)", armorEnvVar),
 	)
+	autosave := flag.DurationP(
+		"autosave",
+		"s",
+		defaultAutosaveVal,
+		fmt.Sprintf("save automatically at regular intervals (0 to disable) (%v)", autosaveEnvVar),
+	)
 	command := flag.StringP(
 		"command",
 		"c",
 		defaultCommand(),
-		fmt.Sprintf("editor command (overrides the editor executable, %v)", commandEnvVar),
+		fmt.Sprintf("editor command with arguments (overrides the editor executable, %v)", commandEnvVar),
 	)
 	decode := flag.String(
 		"decode",
@@ -635,17 +652,17 @@ func cli() int {
 		false,
 		"report the program version and exit",
 	)
-	tempDirPrefix := flag.StringP(
+	tempDirBase := flag.StringP(
 		"temp-dir",
 		"t",
-		defaultTempDirPrefix(),
-		fmt.Sprintf("temporary directory prefix (%v)", tempDirPrefixEnvVar),
+		defaultTempDirBase(),
+		fmt.Sprintf("base temporary directory (%v)", tempDirBaseEnvVar),
 	)
-	warn := flag.IntP(
+	warn := flag.StringP(
 		"warn",
 		"w",
 		defaultWarnVal,
-		fmt.Sprintf("warn if the editor exits after less than a number of seconds (0 to disable, %v)", warnEnvVar),
+		fmt.Sprintf("warn if the editor exits sooner than expected (duration or seconds, 0 to disable, %v)", warnEnvVar),
 	)
 
 	flag.Usage = func() {
@@ -653,8 +670,8 @@ func cli() int {
 			`Usage: %s [options] [[identities] encrypted]
 
 Arguments:
-  identities              identities file path (%s%s)
-  encrypted               encrypted file path (%s%s)
+  identities                identities file path (%s%s)
+  encrypted                 encrypted file path (%s%s)
 
 Options:
 %s
@@ -697,9 +714,10 @@ An identities file and an encrypted file, given in the arguments or the environm
 	}
 
 	cfg := config{
-		idsPath:       identitiesFileDefault,
-		encPath:       encryptedFileDefault,
-		tempDirPrefix: *tempDirPrefix,
+		autosaveInterval: *autosave,
+		idsPath:          identitiesFileDefault,
+		encPath:          encryptedFileDefault,
+		tempDirBase:      *tempDirBase,
 
 		armor:    *armored,
 		force:    *force,
@@ -773,7 +791,25 @@ An identities file and an encrypted file, given in the arguments or the environm
 		cfg.encodeArgs = args[1:]
 	}
 
-	start := int(time.Now().Unix())
+	var warnDuration time.Duration
+
+	if *warn != "" {
+		d, err := time.ParseDuration(*warn)
+		if err != nil {
+			seconds, errInt := strconv.Atoi(*warn)
+			if errInt != nil {
+				fmt.Fprintln(os.Stderr, "Error: invalid duration for --warn:", *warn)
+
+				return exitBadUsage
+			}
+
+			d = time.Duration(seconds) * time.Second
+		}
+
+		warnDuration = d
+	}
+
+	start := time.Now()
 
 	tempDir, err := edit(cfg)
 	if tempDir != "" {
@@ -783,11 +819,11 @@ An identities file and an encrypted file, given in the arguments or the environm
 		defer os.RemoveAll(tempDir)
 	}
 
-	if *warn > 0 && int(time.Now().Unix())-start <= *warn {
+	if warnDuration > 0 && time.Since(start) <= warnDuration {
 		fmt.Fprintf(
 			os.Stderr,
-			"Warning: editor exited after less than %d second(s)\n",
-			*warn,
+			"Warning: editor exited after less than %v\n",
+			warnDuration,
 		)
 	}
 
