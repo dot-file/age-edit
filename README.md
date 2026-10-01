@@ -52,8 +52,8 @@ When you run age-edit with an identities (private keys) file and an encrypted fi
 3. Wait for the editor to exit.
 4. Check if the temporary file has been modified by comparing its checksum before and after editing.
    If the file has been modified (or if the `--force` option is used), proceed, else skip to the next step.
-   Encrypt the contents of the temporary file to the encrypted file using recipients (public keys) derived from the identities file.
    Optionally, encode before encryption by passing the data through a user-supplied command, like a compressor.
+   Encrypt the contents of the temporary file to the encrypted file using recipients (public keys) derived from the identities file.
    The encrypted file can be "armored": stored as ASCII text in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format.
 5. Finally, delete the temporary file.
 
@@ -71,7 +71,7 @@ age-edit is beta-quality software.
 
 ### Build
 
-- Go 1.22
+- Go 1.24
 - Optional: [Task](https://taskfile.dev/) (go-task) 3.28
 
 ### Runtime
@@ -106,13 +106,11 @@ Arguments:
 
 Options:
   -a, --armor               write an armored age file (AGE_EDIT_ARMOR)
-  -s, --autosave duration   save automatically at regular intervals (0 to
-disable, AGE_EDIT_AUTOSAVE)
-  -c, --command string      editor command with arguments (overrides the editor
-executable, AGE_EDIT_COMMAND)
+  -s, --autosave duration   save automatically at regular intervals
+(AGE_EDIT_AUTOSAVE, duration, 0 to disable, default 1m0s)
       --decode string       filter command after decryption, like a decompressor
 (AGE_EDIT_DECODE)
-  -e, --editor string       editor executable (AGE_EDIT_EDITOR, VISUAL, EDITOR,
+  -e, --editor string       editor command (AGE_EDIT_EDITOR, VISUAL, EDITOR,
 default "vi")
       --encode string       filter command before encryption, like a compressor
 (AGE_EDIT_ENCODE)
@@ -127,7 +125,7 @@ changes (AGE_EDIT_READ_ONLY)
 "/dev/shm/")
   -V, --version             report the program version and exit
   -w, --warn string         warn if the editor exits sooner than expected
-(duration or seconds, 0 to disable, AGE_EDIT_WARN)
+(AGE_EDIT_WARN, duration or seconds, 0 to disable)
 
 An identities file and an encrypted file, given in the arguments or the
 environment variables, are required. Default values are read from environment
@@ -136,11 +134,8 @@ true, false, yes, no.
 ```
 <!-- END USAGE -->
 
-The `--editor` option can only specify the editor command to run; it doesn't allow arguments.
-Use the `--command` option to specify a command with arguments.
-
-The command string is split into arguments according to the rules of POSIX shell using [anmitsu/go-shlex](https://github.com/anmitsu/go-shlex).
-For example, `age-edit --command 'foo --bar "baz 5"'` runs `foo --bar 'baz 5' /path/to/temp-file` to edit the temporary file.
+The editor string is split into arguments according to the rules of POSIX shell using [anmitsu/go-shlex](https://github.com/anmitsu/go-shlex).
+For example, `age-edit --editor 'foo --bar "baz 5"'` runs `foo --bar 'baz 5' /path/to/temp-file` to edit the temporary file.
 
 ## File locking
 
@@ -203,7 +198,7 @@ You can use the `--decode` and `--encode` options to apply transformations to th
 
 The `--decode` option specifies a command to run after decryption to decode or decompress the file.
 The `--encode` option specifies a command to run before encryption to encode or compress the file.
-Like `--command`, `--decode` and `--encode` are split into arguments according to the rules of POSIX shell.
+Like `--editor`, `--decode` and `--encode` are split into arguments according to the rules of POSIX shell.
 
 For example, to use [Zstandard](https://en.wikipedia.org/wiki/Zstd) compression:
 
@@ -254,4 +249,6 @@ age-edit doesn't work with multi-document editors.
 
 ## License
 
-MIT.
+[MIT](LICENSE).
+
+age-edit includes a fork of the [go-shlex](https://github.com/anmitsu/go-shlex) library by anmitsu, which is also licensed under the [MIT License](internal/shlex/LICENSE).
